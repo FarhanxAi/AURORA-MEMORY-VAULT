@@ -148,7 +148,6 @@ export function UserProfileView({
   // Form State
   const [fullName, setFullName] = useState(user?.full_name || "");
   const [bio, setBio] = useState(user?.bio || "");
-  const [language, setLanguage] = useState(user?.language || "en");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "");
 
   // Sync state whenever user prop updates or editing mode toggles
@@ -156,7 +155,6 @@ export function UserProfileView({
     if (user) {
       setFullName(user.full_name || "");
       setBio(user.bio || "");
-      setLanguage(user.language || "en");
       setAvatarUrl(user.avatar_url || "");
     }
   }, [user, isEditing]);
@@ -244,27 +242,35 @@ export function UserProfileView({
     return "05 Nov 2026";
   }, [user?.id, user?.created_at]);
 
-  // Dynamic Last Login Display (Updates on every login)
+  // Dynamic Last Login Display — uses Supabase DB value (user.last_login) first,
+  // falls back to localStorage timestamp set during the OAuth callback profile upsert.
   const lastLoginDisplay = useMemo(() => {
-    let rawDate: string | null = null;
-    if (typeof window !== "undefined" && user?.id) {
-      const lastLoginKey = `aurora_last_login_${user.id}`;
-      rawDate = user?.last_login || localStorage.getItem(lastLoginKey);
-    }
-    const d = rawDate ? new Date(rawDate) : new Date();
-    const validD = !isNaN(d.getTime()) ? d : new Date();
+    // Priority 1: real timestamp stored in database via auth callback upsert
+    let rawDate: string | null = user?.last_login || null;
 
-    const datePart = validD.toLocaleDateString("en-GB", {
+    // Priority 2: localStorage cache (set during same login session by vault-store)
+    if (!rawDate && typeof window !== "undefined" && user?.id) {
+      const lastLoginKey = `aurora_last_login_${user.id}`;
+      rawDate = localStorage.getItem(lastLoginKey);
+    }
+
+    // If still no date, do NOT default to now() — show nothing rather than mislead
+    if (!rawDate) return "—";
+
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) return "—";
+
+    const datePart = d.toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
       year: "numeric",
     });
-    const timePart = validD.toLocaleTimeString("en-US", {
+    const timePart = d.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
     });
-    return `${datePart} ${timePart}`;
+    return `${datePart} at ${timePart}`;
   }, [user?.id, user?.last_login]);
 
   // Calculate formatted real storage used.
@@ -483,7 +489,6 @@ export function UserProfileView({
           email: user.email,
           full_name: fullName,
           bio,
-          language,
           avatar_url: avatarUrl,
           updated_at: updatedIso,
         });
@@ -492,7 +497,6 @@ export function UserProfileView({
         ...user,
         full_name: fullName,
         bio,
-        language,
         avatar_url: avatarUrl,
         updated_at: updatedIso,
       };
@@ -515,22 +519,7 @@ export function UserProfileView({
     }
   };
 
-  const getLanguageLabel = (code: string) => {
-    switch (code) {
-      case "es":
-        return "Español (Spanish)";
-      case "fr":
-        return "Français (French)";
-      case "de":
-        return "Deutsch (German)";
-      case "ja":
-        return "日本語 (Japanese)";
-      case "zh":
-        return "中文 (Chinese)";
-      default:
-        return "English (US)";
-    }
-  };
+
 
   return (
     <div className="space-y-6 animate-fadeIn relative">
@@ -821,21 +810,7 @@ export function UserProfileView({
               />
             </div>
 
-            <div className="md:col-span-2 space-y-1.5">
-              <label className="text-xs font-semibold text-white/90">Application Language</label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="w-full p-3.5 rounded-2xl bg-[#030712] border border-white/15 text-xs text-white font-medium focus:outline-none focus:border-aurora-cyan/60 focus:ring-1 focus:ring-aurora-cyan/40 cursor-pointer shadow-inner"
-              >
-                <option value="en">English (US)</option>
-                <option value="es">Español (Spanish)</option>
-                <option value="fr">Français (French)</option>
-                <option value="de">Deutsch (German)</option>
-                <option value="ja">日本語 (Japanese)</option>
-                <option value="zh">中文 (Chinese)</option>
-              </select>
-            </div>
+
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-white/10">

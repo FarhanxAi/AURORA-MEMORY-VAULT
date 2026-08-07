@@ -199,10 +199,9 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
         avatar_url: profile?.avatar_url ?? authUser.user_metadata?.avatar_url ?? "",
         bio: profile?.bio ?? "",
         timezone: profile?.timezone ?? "UTC",
-        language: profile?.language ?? "en",
         created_at: profile?.created_at || authUser.created_at,
         updated_at: profile?.updated_at || authUser.created_at,
-        last_login: new Date().toISOString(),
+        last_login: profile?.last_login || new Date().toISOString(),
       };
 
       setUser(activeProfile);

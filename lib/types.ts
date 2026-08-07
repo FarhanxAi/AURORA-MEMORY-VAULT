@@ -48,7 +48,6 @@ export interface UserProfile {
   avatar_url: string | null;
   bio?: string | null;
   timezone?: string | null;
-  language?: string | null;
   created_at: string;
   updated_at: string;
   last_login: string;
