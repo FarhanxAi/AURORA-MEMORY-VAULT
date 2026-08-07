@@ -19,11 +19,12 @@ export async function GET(request: NextRequest) {
   const targetUrl = new URL(next, baseOrigin);
   const redirectResponse = NextResponse.redirect(targetUrl);
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ynjristkqkakfbubzywy.supabase.co";
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "placeholder-anon-key";
+    "sb_publishable_t0XH0a4hlglJCOsjt7SvVA_6IxFevT6";
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

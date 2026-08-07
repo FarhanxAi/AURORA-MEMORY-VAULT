@@ -1,16 +1,20 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const PROD_SUPABASE_URL = "https://ynjristkqkakfbubzywy.supabase.co";
+const PROD_SUPABASE_ANON_KEY = "sb_publishable_t0XH0a4hlglJCOsjt7SvVA_6IxFevT6";
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || PROD_SUPABASE_URL;
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "placeholder-anon-key";
+    PROD_SUPABASE_ANON_KEY;
 
   try {
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -73,9 +77,6 @@ export async function updateSession(request: NextRequest) {
 
     if (!user && !hasAuthCookie && isProtectedRoute) {
       const url = request.nextUrl.clone();
-      if (url.hostname.includes("0.0.0.0") || url.hostname.includes("127.0.0.1")) {
-        url.hostname = "localhost";
-      }
       url.pathname = "/login";
       url.searchParams.set("redirectTo", pathname);
 
@@ -88,9 +89,6 @@ export async function updateSession(request: NextRequest) {
 
     if (user && isAuthRoute) {
       const url = request.nextUrl.clone();
-      if (url.hostname.includes("0.0.0.0") || url.hostname.includes("127.0.0.1")) {
-        url.hostname = "localhost";
-      }
       url.pathname = "/dashboard";
 
       const redirectResponse = NextResponse.redirect(url);
