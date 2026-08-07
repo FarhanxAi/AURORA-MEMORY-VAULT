@@ -26,9 +26,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
     try {
       const supabase = createClient();
-      const origin = window.location.origin.includes("0.0.0.0")
-        ? window.location.origin.replace("0.0.0.0", "localhost")
-        : window.location.origin;
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
 
       const { error: authError } = await supabase.auth.signInWithOAuth({
         provider: "google",
