@@ -4,17 +4,23 @@
 
 **Your Private, Encrypted, AI-Assisted Memory & Journal Preservation Vault**
 
+[![Live Demo](https://img.shields.io/badge/Live_Website-aurora--memory--vault.netlify.app-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://aurora-memory-vault.netlify.app)
+[![GitHub Branch](https://img.shields.io/badge/Branch-Protected_main-success?style=for-the-badge&logo=github&logoColor=white)](https://github.com/FarhanxAi/AURORA-MEMORY-VAULT)
 [![Next.js](https://img.shields.io/badge/Next.js-15.5.22-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Storage-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
-[![Netlify](https://img.shields.io/badge/Netlify-Deployed-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://www.netlify.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 <br />
 
-[Explore Features](#-key-features) • [Tech Stack](#-tech-stack) • [Getting Started](#-getting-started) • [Architecture](#-folder-structure) • [Roadmap](#-roadmap--future-plans) • [Contributing](#-contributing)
+### 🌐 Live Production Application
+### 👉 [https://aurora-memory-vault.netlify.app](https://aurora-memory-vault.netlify.app)
+
+<br />
+
+[Live Demo](#-live-website-access) • [Explore Features](#-key-features) • [Tech Stack](#-tech-stack) • [Architecture](#-folder-structure) • [Roadmap](#-roadmap--future-plans) • [Contributing](#-contributing)
 
 <br />
 
@@ -26,6 +32,17 @@
 ```
 
 </div>
+
+---
+
+## 🌐 Live Website Access
+
+Aurora Memory Vault is deployed and accessible worldwide with zero installation required:
+
+| Environment | Live Access URL | Status |
+| :--- | :--- | :--- |
+| **Production Web App** | **[https://aurora-memory-vault.netlify.app](https://aurora-memory-vault.netlify.app)** | 🟢 Online |
+| **GitHub Repository** | **[https://github.com/FarhanxAi/AURORA-MEMORY-VAULT](https://github.com/FarhanxAi/AURORA-MEMORY-VAULT)** | 🔒 Protected Branch (`main`) |
 
 ---
 
@@ -56,7 +73,7 @@
 - **Real-Time Storage Quotas**: Accurate byte-level storage meter with warning indicators and storage breakdown cards.
 
 ### 📦 5. Portable Offline Vault Export
-- **One-Click Universal Backup**: Generates an offline ZIP archive formatted with your full profile display name.
+- **One-Click Universal Backup**: Generates an offline ZIP archive formatted with your full profile display name (e.g. `Farhan Husain Demon - Aurora Memory Vault.zip`).
 - **Human-Readable Structure**: Includes original photos (`Images/`), plain text UTF-8 reflections (`Journals/`), individual memory info cards (`Memory Details/`), and a zero-dependency `README.txt`.
 - **Atomic Deletion Engine**: Multi-tier transactional permanent cleanup covering storage buckets, database tables, and local persistence caches.
 
@@ -87,6 +104,10 @@ aurora/
 │   ├── dashboard/              # Main dashboard sub-views (insights, gallery, timeline, etc.)
 │   ├── login/ & signup/        # Authentication pages
 │   ├── globals.css             # Design tokens, gradients, and custom scrollbars
+│   ├── layout.tsx              # Root SEO metadata, JSON-LD Schema, and OpenGraph
+│   ├── robots.ts               # Automated production robots.txt engine
+│   ├── sitemap.ts              # Dynamic multi-route XML sitemap generator
+│   ├── manifest.ts             # Web App standalone manifest
 │   └── page.tsx                # Landing page & feature showcase
 ├── components/                 # Reusable UI component layer
 │   ├── account/                # User profile, storage quotas, and export vault modals
@@ -102,52 +123,44 @@ aurora/
 │   ├── supabase-db.ts          # Dynamic schema probe & atomic deletion transaction
 │   └── types.ts                # TypeScript domain models & interfaces
 ├── public/                     # Static wallpapers, logos, and UI assets
-├── netlify.toml                # Netlify Next.js build manifest
+├── netlify.toml                # Netlify Next.js build manifest & OWASP security headers
 ├── tailwind.config.ts          # Color palettes, glows, and keyframe animations
 └── tsconfig.json               # TypeScript compiler configuration
 ```
 
 ---
 
-## ⚡ Getting Started
+## ⚡ Getting Started & Deployment
 
-### Prerequisites
-- **Node.js**: v18.18.0 or higher
-- **npm** or **pnpm** / **yarn**
-- **Git**
+### 1. Instant Live Website (No Setup Required)
+To use Aurora immediately without installing anything, simply open the live URL:
+👉 **[https://aurora-memory-vault.netlify.app](https://aurora-memory-vault.netlify.app)**
 
-### Installation
+---
 
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/FarhanxAi/AURORA-MEMORY-VAULT.git
-   cd AURORA-MEMORY-VAULT
-   ```
+### 2. Local Developer Setup (Optional)
+If you wish to clone and develop locally:
 
-2. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
+```bash
+# 1. Clone the repository
+git clone https://github.com/FarhanxAi/AURORA-MEMORY-VAULT.git
+cd AURORA-MEMORY-VAULT
 
-3. **Configure Environment Variables**:
-   Create a `.env.local` file in the root directory:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
-   NEXT_PUBLIC_SITE_URL=http://localhost:3000
-   ```
+# 2. Install dependencies
+npm install
 
-4. **Start Development Server**:
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+# 3. Configure environment variables in .env.local
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
+NEXT_PUBLIC_SITE_URL=https://aurora-memory-vault.netlify.app
 
-5. **Build for Production**:
-   ```bash
-   npm run build
-   ```
+# 4. Start local development server
+npm run dev
+
+# 5. Build for production
+npm run build
+```
 
 ---
 
@@ -156,6 +169,8 @@ aurora/
 - [x] **Universal Timeline Gallery**: Scalable infinite scroll for 10,000+ memories.
 - [x] **Zero-Dependency Portable Export**: Complete offline ZIP backup generator.
 - [x] **Atomic Deletion Engine**: Transactional cleanup across database and cloud storage.
+- [x] **Phase 1 Technical SEO**: Dynamic XML sitemap, robots.txt, and Schema.org JSON-LD.
+- [x] **Protected Branch Security**: Deletion & force-push protection on `main`.
 - [ ] **AI Vector Semantic Search**: Natural language memory retrieval using OpenAI / Gemini embeddings.
 - [ ] **Voice Memory Transcription**: Automatic speech-to-text for audio memories with Whisper API.
 - [ ] **End-to-End Client Encryption**: Zero-knowledge password-derived client-side AES-GCM encryption.
@@ -186,6 +201,7 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 **Farhan Hussain**  
 - **GitHub**: [@FarhanxAi](https://github.com/FarhanxAi)  
 - **Repository**: [FarhanxAi/AURORA-MEMORY-VAULT](https://github.com/FarhanxAi/AURORA-MEMORY-VAULT)
+- **Live Application**: [https://aurora-memory-vault.netlify.app](https://aurora-memory-vault.netlify.app)
 
 ---
 
