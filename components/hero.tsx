@@ -32,9 +32,7 @@ export function HeroSection() {
     if (e) e.preventDefault();
     try {
       const supabase = createClient();
-      const origin = typeof window !== "undefined" && window.location.origin.includes("0.0.0.0")
-        ? window.location.origin.replace("0.0.0.0", "localhost")
-        : typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",

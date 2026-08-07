@@ -41,9 +41,7 @@ export function FloatingNavbar() {
     setMobileMenuOpen(false);
     try {
       const supabase = createClient();
-      const origin = typeof window !== "undefined" && window.location.origin.includes("0.0.0.0")
-        ? window.location.origin.replace("0.0.0.0", "localhost")
-        : typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
 
       await supabase.auth.signInWithOAuth({
         provider: "google",

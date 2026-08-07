@@ -9,26 +9,21 @@ export async function GET(request: NextRequest) {
   const errorDescription = searchParams.get("error_description");
   const errorCode = searchParams.get("error_code");
 
-  console.log("=== OAUTH CALLBACK RECEIVED ===");
-  console.log("Full Request URL:", request.url);
-  console.log("SearchParams - code:", code ? `${code.substring(0, 10)}...` : "null");
-  console.log("SearchParams - error:", errorParam);
-  console.log("SearchParams - error_code:", errorCode);
-  console.log("SearchParams - error_description:", errorDescription);
+  // Determine dynamic origin based on request headers (Netlify & local friendly)
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  const baseOrigin = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : request.nextUrl.origin;
 
-  // Determine base origin (strictly enforce localhost:3000, never 0.0.0.0)
-  let baseOrigin = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
-  if (baseOrigin.includes("0.0.0.0")) {
-    baseOrigin = baseOrigin.replace("0.0.0.0", "localhost");
-  }
+  const targetUrl = new URL(next, baseOrigin);
+  const redirectResponse = NextResponse.redirect(targetUrl);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     "placeholder-anon-key";
-
-  const redirectResponse = NextResponse.redirect(`${baseOrigin}${next}`);
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -50,69 +45,60 @@ export async function GET(request: NextRequest) {
 
   // 1. If authorization code is present, exchange it for a session
   if (code) {
-    console.log("Attempting exchangeCodeForSession with code:", `${code.substring(0, 10)}...`);
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error) {
-      console.log("OAuth Code Exchange Successful! Redirecting to:", `${baseOrigin}${next}`);
-      if (sessionData?.user) {
-        // Asynchronous non-blocking profile synchronization for instant OAuth redirect speed
-        (async () => {
-          try {
-            await supabase.from("profiles").upsert({
-              id: sessionData.user.id,
-              email: sessionData.user.email || "",
-              full_name:
-                sessionData.user.user_metadata?.full_name ||
-                sessionData.user.user_metadata?.name ||
-                "Vault Explorer",
-              avatar_url: sessionData.user.user_metadata?.avatar_url || "",
-              updated_at: new Date().toISOString(),
-              last_login: new Date().toISOString(),
-            });
-          } catch (e) {
-            console.error("Profile initialization background error during OAuth callback:", e);
-          }
-        })();
-      }
+    if (!error && sessionData?.user) {
+      // Background profile initialization
+      (async () => {
+        try {
+          await supabase.from("profiles").upsert({
+            id: sessionData.user.id,
+            email: sessionData.user.email || "",
+            full_name:
+              sessionData.user.user_metadata?.full_name ||
+              sessionData.user.user_metadata?.name ||
+              "Vault Explorer",
+            avatar_url: sessionData.user.user_metadata?.avatar_url || "",
+            updated_at: new Date().toISOString(),
+            last_login: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.error("Profile synchronization error during OAuth callback:", e);
+        }
+      })();
+
       return redirectResponse;
     } else {
-      console.error("OAuth code exchange error from Supabase:", error.message);
+      // Fallback: check if session cookie is already active
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        console.log("User already authenticated via session cookie. Redirecting to dashboard.");
         return redirectResponse;
       }
-      const msg = encodeURIComponent(error.message);
-      return NextResponse.redirect(`${baseOrigin}/login?error=${msg}`);
+
+      const msg = encodeURIComponent(error?.message || "Authentication code exchange failed");
+      return NextResponse.redirect(new URL(`/login?error=${msg}`, baseOrigin));
     }
   }
 
-  // 2. Fallback check: user already authenticated via cookies
+  // 2. Check existing user session from cookie
   try {
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      console.log("Existing user session found. Redirecting to dashboard.");
       return redirectResponse;
     }
   } catch (err) {
     console.error("Callback user check error:", err);
   }
 
-  // 3. Handle explicit OAuth errors from provider / Supabase
+  // 3. Handle explicit OAuth error params
   if (errorParam || errorDescription) {
-    console.error("Supabase OAuth Error Callback Payload:", {
-      errorParam,
-      errorCode,
-      errorDescription,
-    });
     const msg = encodeURIComponent(errorDescription || errorParam || "oauth_failed");
-    return NextResponse.redirect(`${baseOrigin}/login?error=${msg}`);
+    return NextResponse.redirect(new URL(`/login?error=${msg}`, baseOrigin));
   }
 
-  return NextResponse.redirect(`${baseOrigin}/login?error=oauth_failed`);
+  return NextResponse.redirect(new URL("/login?error=oauth_failed", baseOrigin));
 }
