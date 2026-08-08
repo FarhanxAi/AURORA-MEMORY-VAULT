@@ -19,6 +19,7 @@ interface ConfirmState {
   isOpen: boolean;
   title: string;
   message: string;
+  requireDeleteTyped?: boolean;   // If true, user must type exactly "DELETE" to enable the confirm button
   onConfirm: () => Promise<void>;
 }
 
@@ -26,15 +27,23 @@ interface ConfirmState {
  * Helper to purge media storage files from Supabase buckets
  */
 async function purgeMemoryStorageFiles(supabase: any, memory: Memory) {
-  const urls = [memory.cover_image, memory.audio_url].filter(Boolean) as string[];
-  for (const url of urls) {
+  // Collect ALL storage URLs: cover_image, ALL gallery images, and audio_url
+  const allUrls: string[] = [];
+  if (memory.cover_image) allUrls.push(memory.cover_image);
+  if (Array.isArray(memory.gallery)) {
+    for (const g of memory.gallery) {
+      if (g && typeof g === "string" && g.trim()) allUrls.push(g.trim());
+    }
+  }
+  if (memory.audio_url) allUrls.push(memory.audio_url);
+
+  for (const url of allUrls.filter(Boolean) as string[]) {
     try {
       if (url.includes("memory-images")) {
-        const path = url.split("memory-images/")[1];
+        const path = url.split("memory-images/")[1]?.split("?")[0];
         if (path) await supabase.storage.from("memory-images").remove([path]);
-      }
-      if (url.includes("memory-audio")) {
-        const path = url.split("memory-audio/")[1];
+      } else if (url.includes("memory-audio")) {
+        const path = url.split("memory-audio/")[1]?.split("?")[0];
         if (path) await supabase.storage.from("memory-audio").remove([path]);
       }
     } catch (e) {
@@ -54,10 +63,12 @@ export function TrashArchiveView({
   const [searchFilter, setSearchFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
+  const [deleteInputValue, setDeleteInputValue] = useState("");  // tracks typed DELETE confirmation
   const [confirmModal, setConfirmModal] = useState<ConfirmState>({
     isOpen: false,
     title: "",
     message: "",
+    requireDeleteTyped: false,
     onConfirm: async () => {},
   });
 
@@ -128,6 +139,7 @@ export function TrashArchiveView({
   };
 
   const closeConfirm = () => {
+    setDeleteInputValue("");  // Always reset the typed confirmation on close
     setConfirmModal((prev) => ({ ...prev, isOpen: false }));
   };
 
@@ -141,6 +153,7 @@ export function TrashArchiveView({
       isOpen: true,
       title: "Empty Trash?",
       message: "This action will permanently delete every memory currently inside Trash. This action cannot be undone.",
+      requireDeleteTyped: true,
       onConfirm: async () => {
         setIsProcessingBatch(true);
         try {
@@ -234,6 +247,7 @@ export function TrashArchiveView({
       isOpen: true,
       title: "Delete Permanently?",
       message: `Are you sure you want to permanently delete "${memory.title}"? This action cannot be undone.`,
+      requireDeleteTyped: true,
       onConfirm: async () => {
         try {
           if (onPermanentDeleteBatch) {
@@ -295,6 +309,7 @@ export function TrashArchiveView({
       isOpen: true,
       title: "Delete Selected Permanently?",
       message: `Are you sure you want to permanently delete the ${selectedIds.length} selected memory item(s)? This action cannot be undone.`,
+      requireDeleteTyped: true,
       onConfirm: async () => {
         setIsProcessingBatch(true);
         try {
@@ -553,6 +568,29 @@ export function TrashArchiveView({
               {confirmModal.message}
             </p>
 
+            {/* Strict DELETE text confirmation — required for all permanent deletions */}
+            {confirmModal.requireDeleteTyped && (
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-rose-300 uppercase tracking-wider">
+                  Type <span className="font-mono text-white bg-rose-500/30 px-1.5 py-0.5 rounded">DELETE</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="Type DELETE here..."
+                  value={deleteInputValue}
+                  onChange={(e) => setDeleteInputValue(e.target.value)}
+                  className={`w-full p-3 rounded-xl border text-sm font-mono text-white bg-white/[0.04] focus:outline-none transition-all ${
+                    deleteInputValue === "DELETE"
+                      ? "border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.4)]"
+                      : "border-white/20 focus:border-rose-400"
+                  }`}
+                />
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -565,8 +603,12 @@ export function TrashArchiveView({
               <button
                 type="button"
                 onClick={confirmModal.onConfirm}
-                disabled={isProcessingBatch}
-                className="px-5 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)]"
+                disabled={isProcessingBatch || (confirmModal.requireDeleteTyped === true && deleteInputValue !== "DELETE")}
+                className={`px-5 py-2.5 rounded-2xl text-white text-xs font-bold transition-all shadow-[0_0_20px_rgba(244,63,94,0.4)] ${
+                  (confirmModal.requireDeleteTyped === true && deleteInputValue !== "DELETE") || isProcessingBatch
+                    ? "bg-rose-900/50 border border-rose-700/40 text-rose-500 cursor-not-allowed opacity-50"
+                    : "bg-rose-600 hover:bg-rose-500 cursor-pointer"
+                }`}
               >
                 Delete Permanently
               </button>

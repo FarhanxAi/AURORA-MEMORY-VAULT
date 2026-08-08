@@ -9,7 +9,13 @@ export function calculateInsightMetrics(memories: Memory[]): InsightMetrics {
 
   const totalMemories = activeMemories.length;
   const favoriteCount = activeMemories.filter((m) => m.favorite).length;
-  const photosCount = activeMemories.filter((m) => m.memory_type === "photo").length;
+  const photosCount = activeMemories.reduce((acc, m) => {
+    let count = 0;
+    if (m.cover_image) count += 1;
+    if (Array.isArray(m.gallery)) count += m.gallery.length;
+    if (!m.cover_image && !m.gallery?.length && m.memory_type === "photo") count += 1;
+    return acc + count;
+  }, 0);
   const journalsCount = activeMemories.filter((m) => m.memory_type === "journal").length;
 
   // Month & Year calculations

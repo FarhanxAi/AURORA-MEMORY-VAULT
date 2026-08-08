@@ -47,7 +47,7 @@ export function WelcomeHeader({ user }: WelcomeHeaderProps) {
     };
 
     updateTime();
-    const timer = setInterval(updateTime, 1000);
+    const timer = setInterval(updateTime, 60000);
     return () => clearInterval(timer);
   }, []);
 

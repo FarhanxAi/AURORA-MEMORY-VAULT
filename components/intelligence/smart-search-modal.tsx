@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Memory } from "@/lib/types";
 import { filterSmartSearch } from "@/lib/intelligence";
+import { highlightMatchingText } from "@/lib/journal-utils";
 
 interface SmartSearchModalProps {
   isOpen: boolean;
@@ -80,24 +81,6 @@ export function SmartSearchModal({
         onClose();
       }
     }
-  };
-
-  // Term highlighter helper
-  const highlightMatches = (text: string, searchTerm: string) => {
-    if (!searchTerm.trim()) return text;
-    const parts = text.split(new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
-    return parts.map((part, i) =>
-      part.toLowerCase() === searchTerm.toLowerCase() ? (
-        <mark
-          key={i}
-          className="bg-aurora-cyan/30 text-aurora-cyan px-0.5 rounded font-semibold"
-        >
-          {part}
-        </mark>
-      ) : (
-        part
-      )
-    );
   };
 
   const getMediaIcon = (type: string) => {
@@ -206,16 +189,16 @@ export function SmartSearchModal({
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-white truncate">
-                              {highlightMatches(mem.title, query)}
+                              {highlightMatchingText(mem.title, query)}
                             </span>
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.08] text-white/60 capitalize font-medium shrink-0">
-                              {mem.memory_type}
+                              {highlightMatchingText(mem.memory_type, query)}
                             </span>
                           </div>
 
                           {mem.description && (
                             <p className="text-xs text-white/60 truncate max-w-md">
-                              {highlightMatches(mem.description, query)}
+                              {highlightMatchingText(mem.description, query)}
                             </p>
                           )}
 
@@ -223,25 +206,27 @@ export function SmartSearchModal({
                             {mem.memory_date && (
                               <span className="flex items-center gap-1">
                                 <CalendarIcon className="w-3 h-3 text-aurora-cyan" />
-                                {mem.memory_date}
+                                {highlightMatchingText(mem.memory_date, query)}
                               </span>
                             )}
                             {mem.location && (
                               <span className="flex items-center gap-1">
                                 <MapPin className="w-3 h-3 text-rose-400" />
-                                {highlightMatches(mem.location, query)}
+                                {highlightMatchingText(mem.location, query)}
                               </span>
                             )}
                             {mem.mood && (
                               <span className="flex items-center gap-1">
                                 <Smile className="w-3 h-3 text-amber-400" />
-                                {mem.mood}
+                                {highlightMatchingText(mem.mood, query)}
                               </span>
                             )}
                             {mem.tags && mem.tags.length > 0 && (
                               <span className="flex items-center gap-1">
                                 <Tag className="w-3 h-3 text-aurora-violet" />
-                                {mem.tags.join(", ")}
+                                {mem.tags.map((t, tidx) => (
+                                  <span key={tidx}>#{highlightMatchingText(t, query)}{tidx < mem.tags.length - 1 ? ", " : ""}</span>
+                                ))}
                               </span>
                             )}
                           </div>

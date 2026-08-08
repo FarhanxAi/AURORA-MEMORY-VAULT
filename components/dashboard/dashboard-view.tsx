@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/toast-context";
 import { vaultStore } from "@/lib/persistence/vault-store";
 import { recoverMemoryImage, purgeAndVerifyMemoryStorageFiles } from "@/lib/image-utils";
+import { reconcileAndMigrateUserAccount } from "@/lib/account-reconciliation";
 
 // Dynamic Code-Splitting & Lazy Loading for Heavy Components & Modals
 const SmartSearchModal = dynamic(() => import("@/components/intelligence/smart-search-modal").then((m) => m.SmartSearchModal), { ssr: false });
@@ -96,16 +97,11 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
     try {
       const supabase = createClient();
 
-      // 1500ms timeout race to prevent auth check hangs
-      const userPromise = supabase.auth.getUser();
-      const timeoutPromise = new Promise<any>((resolve) =>
-        setTimeout(() => resolve({ data: { user: null }, error: new Error("Auth check timeout") }), 1500)
-      );
-
+      // Authenticate user directly from Supabase session
       let {
         data: { user: authUser },
         error: authErr,
-      } = await Promise.race([userPromise, timeoutPromise]);
+      } = await supabase.auth.getUser();
 
       if (authErr || !authUser) {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -113,106 +109,35 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
       }
 
       if (!authUser) {
-        const guestId = "guest-vault-user";
-        const guestProfile: UserProfile = {
-          id: guestId,
-          email: "explorer@auroravault.io",
-          full_name: "Vault Explorer",
-          avatar_url: "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          last_login: new Date().toISOString(),
-        };
-        const cachedProfile = vaultStore.getProfile(guestId) || guestProfile;
-        const cachedMemories = vaultStore.getMemories(guestId) || [];
-        setUser(cachedProfile);
-        setMemories(cachedMemories);
-        setLoading(false);
+        router.push("/login");
         return;
       }
 
-      // INSTANT UNBLOCK FROM VAULT STORE CACHE (< 50ms rendering)
+      // Fast unblock from local cache for instant smooth mobile UI rendering
       const cachedProfile = vaultStore.getProfile(authUser.id);
       const cachedMemories = vaultStore.getMemories(authUser.id);
 
       if (cachedProfile) setUser(cachedProfile);
       if (cachedMemories && cachedMemories.length > 0) {
         setMemories(cachedMemories);
-        setLoading(false); // Immediate unblock for butter smooth UX
+        setLoading(false);
       }
 
-      // PARALLEL SUPABASE FETCH
-      const profilePromise = supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", authUser.id)
-        .maybeSingle();
+      // EXECUTE CANONICAL RECONCILIATION & CROSS-DEVICE DATA MERGE
+      // Merges Laptop memories + Mobile memories + Supabase Cloud into ONE canonical dataset
+      const { unifiedMemories, unifiedProfile } = await reconcileAndMigrateUserAccount(supabase, authUser);
 
-      const memoriesPromise = supabase
-        .from("memories")
-        .select("*")
-        .eq("user_id", authUser.id)
-        .order("memory_date", { ascending: false });
+      setUser(unifiedProfile);
 
-      const collectionsPromise = supabase
+      // Collections fetch for canonical user
+      const { data: colData } = await supabase
         .from("collections")
         .select("*")
         .eq("user_id", authUser.id);
 
-      const [profRes, memRes, colRes] = await Promise.allSettled([
-        profilePromise,
-        memoriesPromise,
-        collectionsPromise,
-      ]);
+      if (colData) setCollections((colData as Collection[]) || []);
 
-      let profile = profRes.status === "fulfilled" ? profRes.value.data : null;
-      let memData = memRes.status === "fulfilled" ? memRes.value.data : null;
-      let colData = colRes.status === "fulfilled" ? colRes.value.data : null;
-
-      if (!profile && cachedProfile) {
-        profile = cachedProfile as typeof profile;
-      }
-
-      if (!profile) {
-        const now = new Date().toISOString();
-        const initialProfile = {
-          id: authUser.id,
-          email: authUser.email || "",
-          full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || "Memory Collector",
-          avatar_url: authUser.user_metadata?.avatar_url || "",
-          created_at: now,
-          updated_at: now,
-          last_login: now,
-        };
-        try {
-          await supabase.from("profiles").upsert(initialProfile);
-        } catch (e) {
-          console.warn("Profiles upsert notice:", e);
-        }
-        profile = initialProfile as typeof profile;
-      }
-
-      const activeProfile: UserProfile = {
-        id: authUser.id,
-        email: authUser.email || "",
-        full_name: profile?.full_name ?? authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? "Memory Collector",
-        avatar_url: profile?.avatar_url ?? authUser.user_metadata?.avatar_url ?? "",
-        bio: profile?.bio ?? "",
-        timezone: profile?.timezone ?? "UTC",
-        created_at: profile?.created_at || authUser.created_at,
-        updated_at: profile?.updated_at || authUser.created_at,
-        last_login: profile?.last_login || new Date().toISOString(),
-      };
-
-      setUser(activeProfile);
-      vaultStore.saveProfile(authUser.id, activeProfile);
-
-      let finalMemories: Memory[] = (memData as Memory[]) || [];
-      if (finalMemories.length === 0 && cachedMemories && cachedMemories.length > 0) {
-        finalMemories = cachedMemories;
-      } else if (finalMemories.length > 0) {
-        vaultStore.saveMemories(authUser.id, finalMemories);
-      }
+      let finalMemories = unifiedMemories;
 
       // Auto Purge items in Trash older than 30 days
       const thirtyDaysAgoMs = 30 * 24 * 60 * 60 * 1000;
@@ -234,25 +159,33 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
       }
 
       setMemories(finalMemories);
-      if (colData) setCollections((colData as Collection[]) || []);
+      vaultStore.saveMemories(authUser.id, finalMemories);
 
-      // PART 1: Run Automatic Image Recovery System in background for older memories
-      Promise.all(
-        finalMemories
-          .filter((m) => m && m.memory_type === "photo")
-          .map((m) => recoverMemoryImage(m))
-      ).then((results) => {
-        const recoveredList = results.filter((r) => r.recovered);
-        if (recoveredList.length > 0) {
-          console.log(`[IMAGE_RECOVERY] Automatically repaired ${recoveredList.length} image memory records.`);
-          setMemories((prev) =>
-            prev.map((existing) => {
-              const match = recoveredList.find((r) => r.memory.id === existing.id);
-              return match ? match.memory : existing;
-            })
-          );
-        }
-      });
+      // PART 1: Run Automatic Image Recovery ONLY for memories with genuinely stale
+      // HTTPS signed URLs (those containing a token= param).
+      const memoriesNeedingRecovery = finalMemories.filter(
+        (m) =>
+          m &&
+          m.memory_type === "photo" &&
+          m.cover_image &&
+          typeof m.cover_image === "string" &&
+          (m.cover_image.startsWith("https://") || m.cover_image.startsWith("http://"))
+      );
+
+      if (memoriesNeedingRecovery.length > 0) {
+        Promise.all(memoriesNeedingRecovery.map((m) => recoverMemoryImage(m))).then((results) => {
+          const recoveredList = results.filter((r) => r.recovered);
+          if (recoveredList.length > 0) {
+            console.log(`[IMAGE_RECOVERY] Automatically repaired ${recoveredList.length} image memory records.`);
+            setMemories((prev) =>
+              prev.map((existing) => {
+                const match = recoveredList.find((r) => r.memory.id === existing.id);
+                return match ? match.memory : existing;
+              })
+            );
+          }
+        });
+      }
     } catch (err: unknown) {
       console.error("Dashboard initialization error:", err);
     } finally {
@@ -320,7 +253,8 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
       return updated;
     });
     addNotification("Memory Saved", `"${newMemory.title}" was protected in your vault.`, "success");
-    fetchDashboardData();
+    // Supabase confirmed the write — optimistic state update is already correct.
+    // No need for a full fetchDashboardData() which causes a redundant re-fetch and data flicker.
   };
 
   const handleMemoryUpdated = (updatedMemory: Memory) => {
@@ -334,7 +268,8 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
       setSelectedMemory(updatedMemory);
     }
     addNotification("Memory Updated", `"${updatedMemory.title}" was updated successfully.`, "success");
-    fetchDashboardData();
+    // Supabase confirmed the write — optimistic state update is already correct.
+    // No need for a full fetchDashboardData() which causes a redundant re-fetch and data flicker.
   };
 
   const handleSelectMemory = (m: Memory) => {

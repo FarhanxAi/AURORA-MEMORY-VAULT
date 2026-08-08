@@ -18,9 +18,13 @@ export function StatsGrid({
   onSelectFilter,
 }: StatsGridProps) {
   const totalMemories = memories.length;
-  const photosCount = memories.filter(
-    (m) => m.memory_type === "photo" || m.cover_image
-  ).length;
+  const photosCount = memories.reduce((acc, m) => {
+    let count = 0;
+    if (m.cover_image) count += 1;
+    if (Array.isArray(m.gallery)) count += m.gallery.length;
+    if (!m.cover_image && !m.gallery?.length && m.memory_type === "photo") count += 1;
+    return acc + count;
+  }, 0);
   const journalsCount = memories.filter(
     (m) => m.memory_type === "journal"
   ).length;

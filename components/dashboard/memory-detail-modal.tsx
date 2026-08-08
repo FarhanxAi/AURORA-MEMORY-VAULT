@@ -67,29 +67,31 @@ export function MemoryDetailModal({
     }
   };
 
-  const safeMood = getSafeMood(memory?.mood);
-  const activeImageSource = allImages.length > 0 ? allImages[selectedImageIndex] : memory.cover_image;
+  const activeImageSource = allImages[selectedImageIndex] || memory.cover_image || null;
+  const safeMood = getSafeMood(memory.mood);
 
   return (
     <ErrorBoundary fallbackTitle="Memory Detail Failed to Load">
       <AnimatePresence>
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain">
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/80 backdrop-blur-xl"
+            className="fixed inset-0 bg-black/85 backdrop-blur-2xl"
           />
 
+          {/* Modal Container */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.35 }}
-            className="relative w-full max-w-3xl glass-panel rounded-3xl p-6 sm:p-8 border border-white/20 shadow-2xl z-10 max-h-[90vh] overflow-y-auto space-y-6"
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="relative w-full max-w-3xl glass-panel rounded-3xl p-5 sm:p-8 border border-white/20 shadow-2xl z-10 space-y-6 max-h-[90vh] overflow-y-auto overscroll-contain touch-pan-y"
           >
-            {/* Header */}
+            {/* Top Bar Navigation */}
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
                 <span className="px-3 py-1 rounded-full bg-aurora-cyan/20 border border-aurora-cyan/40 text-xs font-bold text-aurora-cyan uppercase tracking-wider">
@@ -102,8 +104,14 @@ export function MemoryDetailModal({
               </div>
 
               <button
-                onClick={onClose}
-                className="p-2 rounded-full bg-white/[0.05] border border-white/10 text-white/60 hover:text-white transition-colors cursor-pointer"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onClose();
+                }}
+                className="p-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-white/80 hover:text-white transition-colors cursor-pointer shrink-0 z-30"
+                title="Close"
               >
                 <X className="w-5 h-5" />
               </button>

@@ -7,6 +7,7 @@ import {
   Plus,
   Upload,
   Image as ImageIcon,
+  Images,
   FileText,
   Trash2,
   ChevronLeft,
@@ -19,6 +20,7 @@ import {
   Tag as TagIcon,
   Star,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { GlassInput } from "@/components/ui/glass-input";
 import { GlassButton } from "@/components/ui/glass-button";
@@ -27,7 +29,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/toast-context";
 import { vaultStore } from "@/lib/persistence/vault-store";
 import { AURORA_CATEGORIES, AURORA_MOODS, AURORA_MOOD_GROUPS } from "@/lib/journal-utils";
-import { MEMORY_IMAGE_BUCKET, verifyStorageObjectExists } from "@/lib/image-utils";
+import { MEMORY_IMAGE_BUCKET } from "@/lib/image-utils";
 
 interface CreateMemoryModalProps {
   isOpen: boolean;
@@ -64,7 +66,9 @@ export function CreateMemoryModal({
   const [customCategory, setCustomCategory] = useState("");
   const [customCategoryInput, setCustomCategoryInput] = useState("");
 
-  // Multi-image file states (Max 10 images, 10MB combined total size limit)
+  // Group Images Mode: Default is OFF (Single Image)
+  // When ON: allows up to 5 images max (2, 3, 4, or 5 images)
+  const [isGroupImages, setIsGroupImages] = useState(false);
   const [imageItems, setImageItems] = useState<ImageItem[]>([]);
 
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -72,6 +76,7 @@ export function CreateMemoryModal({
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusText, setUploadStatusText] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -84,12 +89,18 @@ export function CreateMemoryModal({
   // Sync default memory type & active auth user ID on modal open
   useEffect(() => {
     if (isOpen) {
+      document.body.style.overflow = "hidden";
       setMemoryType(defaultType || "photo");
       const supabase = createClient();
       supabase.auth.getUser().then(({ data: { user: authUser } }) => {
         if (authUser) setActiveUserId(authUser.id);
       });
+    } else {
+      document.body.style.overflow = "";
     }
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen, defaultType]);
 
   // Combined size calculation
@@ -112,6 +123,7 @@ export function CreateMemoryModal({
     setTagInput("");
     setMemoryDate(new Date().toISOString().split("T")[0]);
     setIsFavorite(false);
+    setIsGroupImages(false);
 
     // Clean up previews
     imageItems.forEach((item) => URL.revokeObjectURL(item.preview));
@@ -122,39 +134,96 @@ export function CreateMemoryModal({
     setAudioPreview(null);
     setIsUploading(false);
     setUploadProgress(0);
+    setUploadStatusText("");
   }, [defaultType, imageItems, audioPreview]);
 
   // -------------------------------------------------------------
-  // MULTI-IMAGE VALIDATION & ADD HANDLERS
+  // IMAGE VALIDATION & ADD HANDLERS (ENFORCES 1 IMAGE vs MAX 5 GROUPED)
   // -------------------------------------------------------------
-  const addImageFiles = useCallback((files: FileList | File[]) => {
-    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    const fileArray = Array.from(files);
+  const addImageFiles = useCallback(
+    (files: FileList | File[]) => {
+      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+      const fileArray = Array.from(files);
+      if (fileArray.length === 0) return;
 
-    if (imageItems.length + fileArray.length > 10) {
-      error("Maximum 10 Images", "You can upload a maximum of 10 images per memory.");
-      return;
-    }
+      // 1. Single Image Mode (Group Images is OFF)
+      if (!isGroupImages) {
+        if (imageItems.length >= 1 || fileArray.length > 1) {
+          error(
+            "Single Image Limit",
+            "A normal memory allows exactly 1 image. Enable 'Group Images' below to upload up to 5 images."
+          );
+          // If no image is currently selected, pick only the first file
+          if (imageItems.length === 0 && fileArray.length > 1) {
+            const firstFile = fileArray[0];
+            if (!validTypes.includes(firstFile.type.toLowerCase())) {
+              error("Unsupported Format", `"${firstFile.name}" is not supported. Use JPG, JPEG, PNG, or WEBP.`);
+              return;
+            }
+            setImageItems([{ file: firstFile, preview: URL.createObjectURL(firstFile) }]);
+            info("Single Image Selected", "Selected 1 image. Enable 'Group Images' to add more.");
+          }
+          return;
+        }
 
-    const invalidFile = fileArray.find((f) => !validTypes.includes(f.type.toLowerCase()));
-    if (invalidFile) {
-      error("Unsupported Format", `"${invalidFile.name}" is not supported. Use JPG, JPEG, PNG, or WEBP.`);
-      return;
-    }
+        const singleFile = fileArray[0];
+        if (!validTypes.includes(singleFile.type.toLowerCase())) {
+          error("Unsupported Format", `"${singleFile.name}" is not supported. Use JPG, JPEG, PNG, or WEBP.`);
+          return;
+        }
 
-    const addedSizeBytes = fileArray.reduce((acc, f) => acc + f.size, 0);
-    if (totalImagesSizeBytes + addedSizeBytes > 10 * 1024 * 1024) {
-      error("Total Size Exceeded", "Maximum total upload size for all images combined is 10 MB.");
-      return;
-    }
+        if (singleFile.size > 10 * 1024 * 1024) {
+          error("File Too Large", "Maximum image size is 10 MB.");
+          return;
+        }
 
-    const newItems: ImageItem[] = fileArray.map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-    }));
+        // Clean existing preview
+        imageItems.forEach((it) => URL.revokeObjectURL(it.preview));
+        setImageItems([{ file: singleFile, preview: URL.createObjectURL(singleFile) }]);
+        return;
+      }
 
-    setImageItems((prev) => [...prev, ...newItems]);
-  }, [imageItems.length, totalImagesSizeBytes, error]);
+      // 2. Group Images Mode (Max 5 Images)
+      const currentCount = imageItems.length;
+      if (currentCount >= 5) {
+        error("Maximum 5 Images", "You can upload a maximum of 5 images per memory.");
+        return;
+      }
+
+      if (currentCount + fileArray.length > 5) {
+        error(
+          "5 Image Limit",
+          `You selected ${fileArray.length} images, but only ${5 - currentCount} more can be added (Max 5 images total).`
+        );
+      }
+
+      // Filter valid types
+      const invalidFile = fileArray.find((f) => !validTypes.includes(f.type.toLowerCase()));
+      if (invalidFile) {
+        error("Unsupported Format", `"${invalidFile.name}" is not supported. Use JPG, JPEG, PNG, or WEBP.`);
+        return;
+      }
+
+      // Check total combined size limit (10MB)
+      const addedSizeBytes = fileArray.reduce((acc, f) => acc + f.size, 0);
+      if (totalImagesSizeBytes + addedSizeBytes > 10 * 1024 * 1024) {
+        error("Total Size Exceeded", "Maximum total upload size for all images combined is 10 MB.");
+        return;
+      }
+
+      // Strictly take up to available slots (max 5)
+      const availableSlots = 5 - currentCount;
+      const allowedFiles = fileArray.slice(0, availableSlots);
+
+      const newItems: ImageItem[] = allowedFiles.map((file) => ({
+        file,
+        preview: URL.createObjectURL(file),
+      }));
+
+      setImageItems((prev) => [...prev, ...newItems]);
+    },
+    [isGroupImages, imageItems, totalImagesSizeBytes, error, info]
+  );
 
   const removeImageItem = (index: number) => {
     setImageItems((prev) => {
@@ -280,6 +349,7 @@ export function CreateMemoryModal({
 
   // -------------------------------------------------------------
   // SAVE MEMORY HANDLER (REAL SUPABASE STORAGE + DATABASE INSERT)
+  // Strict 5-image limit enforced in UI AND Backend logic
   // -------------------------------------------------------------
   const handleSaveMemory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -290,14 +360,21 @@ export function CreateMemoryModal({
       return;
     }
 
-    // Pre-upload hard limit validation
+    // Strict validation: enforce max 5 images limit
+    const filesToUpload = isGroupImages ? imageItems.slice(0, 5) : imageItems.slice(0, 1);
+    if (filesToUpload.length > 5) {
+      error("Limit Exceeded", "Maximum 5 images allowed per memory.");
+      return;
+    }
+
     if (totalImagesSizeBytes > 10 * 1024 * 1024) {
       error("Storage Exceeded", "Uploading these files would exceed your combined 10 MB image limit.");
       return;
     }
 
     setIsUploading(true);
-    setUploadProgress(15);
+    setUploadProgress(10);
+    setUploadStatusText("Connecting to Supabase Vault...");
 
     try {
       const supabase = createClient();
@@ -315,69 +392,70 @@ export function CreateMemoryModal({
       let coverImageUrl: string | null = null;
       const uploadedGalleryUrls: string[] = [];
 
-      // Helper for Base64 Data URL fallback
-      const fileToBase64 = (file: File): Promise<string> => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => resolve("");
-          reader.readAsDataURL(file);
-        });
-      };
+      // Upload Images to 'memory-images' storage bucket with precise progress
+      if (filesToUpload.length > 0) {
+        const totalFiles = filesToUpload.length;
+        const uploadedPaths: string[] = [];
 
-      // Upload All Images to 'memory-images' bucket in parallel with guaranteed zero loss
-      if (imageItems.length > 0) {
-        setUploadProgress(30);
+        for (let i = 0; i < totalFiles; i++) {
+          const item = filesToUpload[i];
+          const pct = 15 + Math.round(((i + 0.5) / totalFiles) * 70);
+          setUploadProgress(pct);
+          setUploadStatusText(`Uploading Image ${i + 1} of ${totalFiles} (${Math.round(((i + 1) / totalFiles) * 100)}%)...`);
 
-        const uploadPromises = imageItems.map(async (item, i) => {
           const fileExt = item.file.name.split(".").pop()?.toLowerCase() || "jpg";
-          const uniqueId = Math.random().toString(36).substring(2, 8);
+          const uniqueId = Math.random().toString(36).substring(2, 9);
           const filePath = `${userId}/${Date.now()}_${i}_${uniqueId}.${fileExt}`;
 
           try {
             const { data: uploadData, error: uploadErr } = await supabase.storage
               .from(MEMORY_IMAGE_BUCKET)
-              .upload(filePath, item.file, { upsert: true });
+              .upload(filePath, item.file, {
+                cacheControl: "3600",
+                upsert: true,
+                contentType: item.file.type || "image/jpeg",
+              });
 
-            if (!uploadErr && uploadData?.path) {
-              return uploadData.path;
+            if (uploadErr) {
+              // Try creating bucket or retry once if 404
+              if (uploadErr.message?.toLowerCase().includes("not found")) {
+                await supabase.storage.createBucket(MEMORY_IMAGE_BUCKET, {
+                  public: true,
+                  allowedMimeTypes: ["image/*"],
+                });
+                const retry = await supabase.storage
+                  .from(MEMORY_IMAGE_BUCKET)
+                  .upload(filePath, item.file, { upsert: true });
+                if (retry.data?.path) {
+                  uploadedPaths.push(retry.data.path);
+                  continue;
+                }
+              }
+              console.error(`[STORAGE UPLOAD ERROR] Image ${i + 1} failed:`, uploadErr);
+              throw new Error(`Failed to upload image ${i + 1}: ${uploadErr.message}`);
             }
-            // Fallback to base64 data URL
-            const base64Url = await fileToBase64(item.file);
-            return base64Url || filePath;
-          } catch {
-            const base64Url = await fileToBase64(item.file);
-            return base64Url || filePath;
-          }
-        });
 
-        const uploadResults = await Promise.allSettled(uploadPromises);
-        const resolvedPaths: string[] = [];
-
-        for (let i = 0; i < uploadResults.length; i++) {
-          const res = uploadResults[i];
-          if (res.status === "fulfilled" && res.value) {
-            resolvedPaths.push(res.value);
-          } else {
-            // Guarantee fallback for any rejected promise
-            const fallback = await fileToBase64(imageItems[i].file);
-            if (fallback) resolvedPaths.push(fallback);
+            if (uploadData?.path) {
+              uploadedPaths.push(uploadData.path);
+            } else {
+              uploadedPaths.push(filePath);
+            }
+          } catch (fileErr: any) {
+            console.error(`[UPLOAD FAILURE] Image ${i + 1}:`, fileErr);
+            throw new Error(`Upload failed for image "${item.file.name}". ${fileErr?.message || ""}`);
           }
         }
 
-        if (resolvedPaths.length > 0) {
-          coverImageUrl = resolvedPaths[0];
-          for (let k = 1; k < resolvedPaths.length; k++) {
-            uploadedGalleryUrls.push(resolvedPaths[k]);
+        // Assign cover image (1st) and gallery (remaining up to 4)
+        if (uploadedPaths.length > 0) {
+          coverImageUrl = uploadedPaths[0];
+          for (let k = 1; k < uploadedPaths.length; k++) {
+            uploadedGalleryUrls.push(uploadedPaths[k]);
           }
         }
 
-        // Guaranteed persistent fallback if cover image is missing
-        if (!coverImageUrl && imageItems[0]) {
-          coverImageUrl = await fileToBase64(imageItems[0].file);
-        }
-
-        setUploadProgress(80);
+        setUploadProgress(88);
+        setUploadStatusText("Saving memory record to database...");
       }
 
       const now = new Date();
@@ -385,15 +463,17 @@ export function CreateMemoryModal({
       const autoDateOnly = autoIsoString.split("T")[0];
       const finalMemoryDate = memoryType === "journal" ? autoDateOnly : memoryDate;
 
-      // Resolve final category: if custom, use the user-typed value (fall back to "Custom" if not filled)
-      const finalCategory = category === "Custom"
-        ? (customCategoryInput.trim() || customCategory.trim() || "Custom")
-        : category;
-      const finalTags = [...tags]; // STRICT USER-ENTERED TAGS ONLY
+      // Resolve final category: if custom, use the user-typed value
+      const finalCategory =
+        category === "Custom"
+          ? customCategoryInput.trim() || customCategory.trim() || "Custom"
+          : category;
+      const finalTags = [...tags];
 
-      const totalUploadedBytes = imageItems.reduce((acc, item) => acc + (item.file?.size || 0), 0);
+      const totalUploadedBytes = filesToUpload.reduce((acc, item) => acc + (item.file?.size || 0), 0);
 
       // Insert Record into Supabase `memories` table
+      // Connects ALL uploaded images to the SAME memory row (cover_image + gallery)
       const newRecord = {
         user_id: userId,
         title: title.trim() || (memoryType === "journal" ? "Untitled Journal" : "Untitled Memory"),
@@ -422,10 +502,13 @@ export function CreateMemoryModal({
         .select("*")
         .single();
 
-      if (!dbError && insertedData) {
+      if (dbError) {
+        console.error("Database insert error:", dbError.message);
+        throw new Error(`Database error: ${dbError.message}`);
+      }
+
+      if (insertedData) {
         finalMemory = insertedData as Memory;
-      } else if (dbError) {
-        console.warn("Database insert notice:", dbError.message);
       }
 
       if (!finalMemory) {
@@ -441,13 +524,20 @@ export function CreateMemoryModal({
       }
 
       setUploadProgress(100);
-      success("Memory Saved", "Memory permanently stored in your vault.");
+      setUploadStatusText("Memory Saved!");
+
+      const imageCountMsg = filesToUpload.length > 1
+        ? `Grouped memory with ${filesToUpload.length} photos saved.`
+        : "Memory permanently stored in your vault.";
+      success("Memory Saved", imageCountMsg);
+
       onMemoryCreated(finalMemory);
       resetForm();
       onClose();
-    } catch (err) {
-      console.warn("Save memory error:", err);
-      error("Save Error", "Could not save memory to server.");
+    } catch (err: any) {
+      console.error("Save memory error:", err);
+      const msg = err instanceof Error ? err.message : "Could not save memory to server.";
+      error("Save Error", msg);
     } finally {
       setIsUploading(false);
     }
@@ -487,8 +577,13 @@ export function CreateMemoryModal({
             </div>
             <button
               type="button"
-              onClick={onClose}
-              className="p-2 rounded-full bg-white/[0.05] border border-white/10 text-white/60 hover:text-white transition-colors cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-white/80 hover:text-white transition-colors cursor-pointer shrink-0 z-30"
+              title="Close"
             >
               <X className="w-5 h-5" />
             </button>
@@ -499,7 +594,7 @@ export function CreateMemoryModal({
             <input
               ref={replaceInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
               onChange={handleReplaceFileSelected}
               className="hidden"
             />
@@ -591,20 +686,71 @@ export function CreateMemoryModal({
               </div>
             </div>
 
-            {/* MULTI-IMAGE UPLOAD DROPZONE & PREVIEW GRID (PHOTO MODE ONLY) */}
+            {/* PHOTO MEMORY SECTION WITH SINGLE vs GROUP IMAGES TOGGLE */}
             {memoryType === "photo" && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-white/70">
-                    Upload Images (Up to 10 Images, 10 MB Combined Max)
-                  </label>
-                  <span className="text-[11px] font-mono text-aurora-cyan">
-                    {imageItems.length} / 10 Images ({totalImagesSizeMb} MB / 10 MB)
-                  </span>
+              <div className="space-y-4 rounded-3xl bg-white/[0.02] border border-white/10 p-4 sm:p-5">
+                {/* Clear "Group Images" Option / Toggle */}
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`p-2.5 rounded-xl border transition-colors ${
+                        isGroupImages
+                          ? "bg-aurora-cyan/20 border-aurora-cyan/50 text-aurora-cyan"
+                          : "bg-white/[0.05] border-white/10 text-white/50"
+                      }`}
+                    >
+                      <Images className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">Group Images</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${
+                            isGroupImages
+                              ? "bg-aurora-cyan/20 border-aurora-cyan/40 text-aurora-cyan shadow-[0_0_10px_rgba(56,189,248,0.2)]"
+                              : "bg-white/[0.05] border-white/10 text-white/50"
+                          }`}
+                        >
+                          {isGroupImages ? "ON (2 - 5 Photos Max)" : "OFF (Single Photo Default)"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-white/60 mt-0.5">
+                        {isGroupImages
+                          ? "Group multiple photos (up to 5 max) into this single memory."
+                          : "Default: Exactly 1 photo. Turn on to select 2, 3, 4, or 5 photos together."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isGroupImages}
+                    onClick={() => {
+                      const next = !isGroupImages;
+                      setIsGroupImages(next);
+                      if (!next && imageItems.length > 1) {
+                        imageItems.slice(1).forEach((item) => URL.revokeObjectURL(item.preview));
+                        setImageItems([imageItems[0]]);
+                        info("Single Image Mode", "Retained the primary photo. Extra photos removed.");
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      isGroupImages ? "bg-aurora-cyan shadow-[0_0_12px_rgba(56,189,248,0.5)]" : "bg-white/20"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        isGroupImages ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
                 </div>
 
-                {/* Dropzone */}
-                {imageItems.length < 10 && (
+                {/* Dropzone & Selector */}
+                {((!isGroupImages && imageItems.length === 0) ||
+                  (isGroupImages && imageItems.length < 5)) && (
                   <div
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
@@ -618,7 +764,7 @@ export function CreateMemoryModal({
                     <input
                       ref={fileInputRef}
                       type="file"
-                      multiple
+                      multiple={isGroupImages}
                       accept="image/jpeg,image/jpg,image/png,image/webp"
                       onChange={(e) => {
                         if (e.target.files) addImageFiles(e.target.files);
@@ -630,19 +776,59 @@ export function CreateMemoryModal({
                     <div className="flex flex-col items-center gap-2">
                       <Upload className="w-8 h-8 text-aurora-cyan group-hover:scale-110 transition-transform" />
                       <p className="text-xs font-medium text-white/80">
-                        Drag & Drop up to 10 images here, paste from clipboard, or{" "}
-                        <span className="text-aurora-cyan font-bold">Browse</span>
+                        {isGroupImages ? (
+                          <>
+                            Drag & drop up to <span className="text-aurora-cyan font-bold">5 photos</span> together, or{" "}
+                            <span className="text-aurora-cyan font-bold underline">Browse</span>
+                          </>
+                        ) : (
+                          <>
+                            Drag & drop <span className="text-aurora-cyan font-bold">1 photo</span> here, or{" "}
+                            <span className="text-aurora-cyan font-bold underline">Browse</span>
+                          </>
+                        )}
                       </p>
                       <p className="text-[10px] text-white/40">
-                        Supported: JPG, JPEG, PNG, WEBP &bull; Max 10 MB combined total
+                        JPG, JPEG, PNG, WEBP &bull; Max 10 MB total
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* Multi-Image Thumbnail Preview Grid with Reorder, Replace, Remove */}
+                {/* Single Image Mode Notification when 1 image is selected */}
+                {!isGroupImages && imageItems.length === 1 && (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white/70">
+                    <span className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      Single Image Loaded (1/1)
+                    </span>
+                    <span className="text-[11px] text-white/50">
+                      Enable &ldquo;Group Images&rdquo; above to attach up to 5 photos.
+                    </span>
+                  </div>
+                )}
+
+                {/* Group Images Capacity Counter */}
+                {isGroupImages && (
+                  <div className="flex items-center justify-between text-xs px-1">
+                    <span className="text-white/60">
+                      Attached Images: <strong className="text-white">{imageItems.length} / 5</strong>
+                    </span>
+                    <span className="font-mono text-[11px] text-aurora-cyan">
+                      {totalImagesSizeMb} MB / 10 MB
+                    </span>
+                  </div>
+                )}
+
+                {/* Preview Grid for Attached Images */}
                 {imageItems.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/10">
+                  <div
+                    className={`grid gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/10 ${
+                      !isGroupImages
+                        ? "grid-cols-1 max-w-xs mx-auto"
+                        : "grid-cols-2 sm:grid-cols-3 md:grid-cols-5"
+                    }`}
+                  >
                     {imageItems.map((item, idx) => (
                       <div
                         key={idx}
@@ -655,13 +841,13 @@ export function CreateMemoryModal({
                         />
 
                         {/* Image Index Badge */}
-                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-[10px] font-mono font-bold text-aurora-cyan">
+                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-mono font-bold text-aurora-cyan border border-white/10">
                           {idx === 0 ? "Cover" : `#${idx + 1}`}
                         </span>
 
                         {/* Hover Overlay Action Controls */}
                         <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1 backdrop-blur-xs">
-                          {idx > 0 && (
+                          {isGroupImages && idx > 0 && (
                             <button
                               type="button"
                               onClick={() => moveImageItem(idx, "left")}
@@ -690,7 +876,7 @@ export function CreateMemoryModal({
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
 
-                          {idx < imageItems.length - 1 && (
+                          {isGroupImages && idx < imageItems.length - 1 && (
                             <button
                               type="button"
                               onClick={() => moveImageItem(idx, "right")}
@@ -842,6 +1028,24 @@ export function CreateMemoryModal({
               </button>
             </div>
 
+            {/* Upload Progress Status Indicator */}
+            {isUploading && (
+              <div className="p-3.5 rounded-2xl bg-aurora-cyan/10 border border-aurora-cyan/30 space-y-2 animate-fadeIn">
+                <div className="flex items-center justify-between text-xs font-semibold text-aurora-cyan">
+                  <span>{uploadStatusText || "Uploading..."}</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    className="bg-gradient-to-r from-aurora-cyan to-aurora-violet h-full rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${uploadProgress}%` }}
+                    transition={{ duration: 0.2 }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
               <GlassButton
@@ -849,6 +1053,7 @@ export function CreateMemoryModal({
                 variant="secondary"
                 size="md"
                 onClick={onClose}
+                disabled={isUploading}
               >
                 Cancel
               </GlassButton>

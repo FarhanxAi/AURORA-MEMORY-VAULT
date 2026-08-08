@@ -283,6 +283,7 @@ export function UnifiedTimelineGallery({
             <MemoryCard
               key={mem.id}
               memory={mem}
+              searchQuery={deferredSearchQuery}
               onSelectMemory={onSelectMemory}
               onFavoriteToggle={onFavoriteToggle}
             />

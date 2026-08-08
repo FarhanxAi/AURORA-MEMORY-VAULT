@@ -95,6 +95,17 @@ export function CinematicMemoryViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [memory, currentIndex, activeList, onClose, onSelectMemory]);
 
+  useEffect(() => {
+    if (memory) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [memory]);
+
   if (!memory) return null;
 
   // Strictly check if memory type is journal
@@ -291,8 +302,13 @@ export function CinematicMemoryViewer({
                     </button>
 
                     <button
-                      onClick={onClose}
-                      className="p-2 rounded-full bg-white/[0.05] border border-white/10 text-white/60 hover:text-white cursor-pointer"
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClose();
+                      }}
+                      className="p-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-white/80 hover:text-white transition-colors cursor-pointer shrink-0 z-30"
                       title="Close"
                     >
                       <X className="w-4 h-4" />

@@ -16,9 +16,10 @@ import { createClient } from "@/lib/supabase/client";
 interface RecentActivityProps {
   memories: Memory[];
   onSelectMemory: (m: Memory) => void;
+  userId?: string;
 }
 
-export function RecentActivity({ memories, onSelectMemory }: RecentActivityProps) {
+export function RecentActivity({ memories, onSelectMemory, userId: userIdProp }: RecentActivityProps) {
   const [activities, setActivities] = useState<RecentActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,13 +27,20 @@ export function RecentActivity({ memories, onSelectMemory }: RecentActivityProps
   const fetchRecentActivity = useCallback(async () => {
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+
+      // Use the userId passed from the already-authenticated dashboard to avoid
+      // a redundant supabase.auth.getUser() network round-trip on every render.
+      let resolvedUserId = userIdProp;
+      if (!resolvedUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        resolvedUserId = user.id;
+      }
 
       const { data } = await supabase
         .from("recent_activity")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", resolvedUserId)
         .order("timestamp", { ascending: false })
         .limit(10);
 
@@ -49,7 +57,7 @@ export function RecentActivity({ memories, onSelectMemory }: RecentActivityProps
     } finally {
       setLoading(false);
     }
-  }, [memories]);
+  }, [memories, userIdProp]);
 
   useEffect(() => {
     fetchRecentActivity();

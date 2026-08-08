@@ -61,12 +61,27 @@ export function ExportVaultModal({
     [memories, user?.avatar_url]
   );
 
-  const photoCount = activeMemories.filter(
-    (m) => m.memory_type === "photo" || m.cover_image
-  ).length;
+  const photoCount = activeMemories.reduce((acc, m) => {
+    let count = 0;
+    if (m.cover_image) count += 1;
+    if (Array.isArray(m.gallery)) count += m.gallery.length;
+    if (!m.cover_image && !m.gallery?.length && m.memory_type === "photo") count += 1;
+    return acc + count;
+  }, 0);
   const journalCount = activeMemories.filter(
     (m) => m.memory_type === "journal"
   ).length;
+
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   // ── EXPORT ─────────────────────────────────────────────────────────────────
   const handleStartExport = async () => {

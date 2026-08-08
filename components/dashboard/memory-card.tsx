@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Image as ImageIcon,
@@ -9,22 +9,23 @@ import {
   MapPin,
   Calendar,
   Clock,
-  Lock,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Memory } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 import { resolveMemoryImageUrl, resolveMemoryImageUrlAsync } from "@/lib/image-utils";
-import { formatJournalDateTime } from "@/lib/journal-utils";
+import { formatJournalDateTime, highlightMatchingText } from "@/lib/journal-utils";
 
 interface MemoryCardProps {
   memory: Memory;
+  searchQuery?: string;
   onFavoriteToggle: (id: string, newFavState: boolean) => void;
   onSelectMemory: (memory: Memory) => void;
 }
 
 export const MemoryCard = React.memo(function MemoryCard({
   memory,
+  searchQuery = "",
   onFavoriteToggle,
   onSelectMemory,
 }: MemoryCardProps) {
@@ -69,6 +70,8 @@ export const MemoryCard = React.memo(function MemoryCard({
     }
   };
 
+  const formattedDate = formatJournalDateTime(memory.created_at || memory.memory_date);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -89,6 +92,7 @@ export const MemoryCard = React.memo(function MemoryCard({
               src={imageUrl}
               alt={memory.title || "Memory Photo"}
               loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
           ) : (
@@ -128,38 +132,38 @@ export const MemoryCard = React.memo(function MemoryCard({
           </div>
         </div>
 
-        {/* Card Body Details: TITLE FIRST (Primary Focus), Category BELOW Title */}
+        {/* Card Body Details */}
         <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
           <div className="space-y-2">
-            {/* 1. PRIMARY TITLE (Boldest & Largest) */}
+            {/* 1. PRIMARY TITLE (Highlighted when searching) */}
             <h3 className="font-display font-extrabold text-white text-lg leading-snug group-hover:text-aurora-cyan transition-colors line-clamp-2">
-              {memory.title}
+              {highlightMatchingText(memory.title, searchQuery)}
             </h3>
 
-            {/* 2. CATEGORY BADGE (Below Title, Never Above) */}
+            {/* 2. CATEGORY BADGE (Highlighted when searching) */}
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-aurora-cyan/15 border border-aurora-cyan/35 text-[10px] font-bold text-aurora-cyan uppercase tracking-wider">
                 {typeIcons[memory.memory_type]}
-                <span>{memory.category || "Personal"}</span>
+                <span>{highlightMatchingText(memory.category || "Personal", searchQuery)}</span>
               </span>
             </div>
 
-            {/* 3. DATE & 12-HOUR TIME */}
+            {/* 3. DATE & 12-HOUR TIME (Highlighted when searching) */}
             <div className="flex items-center justify-between text-[11px] text-white/70 pt-1">
               <span className="flex items-center gap-1 font-semibold text-aurora-cyan">
                 <Calendar className="w-3.5 h-3.5 text-aurora-cyan" />
-                {formatJournalDateTime(memory.created_at || memory.memory_date).dayAndDate}
+                {highlightMatchingText(formattedDate.dayAndDate, searchQuery)}
               </span>
               <span className="flex items-center gap-1 font-mono font-bold text-white/90 text-[10px]">
                 <Clock className="w-3 h-3 text-aurora-cyan" />
-                {formatJournalDateTime(memory.created_at || memory.memory_date).timeStr}
+                {highlightMatchingText(formattedDate.timeStr, searchQuery)}
               </span>
             </div>
 
-            {/* Description / Journal Snippet */}
+            {/* Description / Journal Snippet (Highlighted when searching) */}
             {memory.description && (
               <p className="text-xs text-white/60 line-clamp-2 leading-relaxed font-sans pt-1">
-                {memory.description}
+                {highlightMatchingText(memory.description, searchQuery)}
               </p>
             )}
           </div>
@@ -169,7 +173,7 @@ export const MemoryCard = React.memo(function MemoryCard({
             {memory.location ? (
               <span className="flex items-center gap-1 truncate max-w-[140px]">
                 <MapPin className="w-3 h-3 text-aurora-violet shrink-0" />
-                <span className="truncate">{memory.location}</span>
+                <span className="truncate">{highlightMatchingText(memory.location, searchQuery)}</span>
               </span>
             ) : (
               <span className="text-white/40 italic text-[10px]">No location</span>
@@ -178,7 +182,7 @@ export const MemoryCard = React.memo(function MemoryCard({
             {Array.isArray(memory.tags) && memory.tags.length > 0 && (
               <div className="flex items-center gap-1 overflow-hidden">
                 <span className="px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/10 font-mono text-[10px] text-aurora-cyan truncate">
-                  #{memory.tags[0]}
+                  #{highlightMatchingText(memory.tags[0], searchQuery)}
                 </span>
                 {memory.tags.length > 1 && (
                   <span className="text-[10px] text-white/40 font-mono">

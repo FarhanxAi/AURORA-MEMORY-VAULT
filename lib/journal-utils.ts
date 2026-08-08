@@ -1,10 +1,44 @@
+import React from "react";
 import { Memory } from "./types";
 
-
-
 /**
- * Calculates reading metrics for journal text.
+ * Visual text highlighter for memory search results.
+ * Highlights each matching query term inside the text without altering the stored string.
+ * Handles uppercase/lowercase differences, multiple matches, multiple terms, and special characters.
  */
+export function highlightMatchingText(
+  text: string | null | undefined,
+  query: string | null | undefined
+): React.ReactNode {
+  if (!text || typeof text !== "string") return text ?? "";
+  if (!query || typeof query !== "string" || !query.trim()) return text;
+
+  const rawTerms = query.trim().split(/\s+/).filter(Boolean);
+  if (rawTerms.length === 0) return text;
+
+  // Escape special regex characters
+  const escapedTerms = rawTerms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const regex = new RegExp(`(${escapedTerms.join("|")})`, "gi");
+
+  const parts = text.split(regex);
+  if (parts.length <= 1) return text;
+
+  return parts.map((part, i) => {
+    const isMatch = rawTerms.some((t) => t.toLowerCase() === part.toLowerCase());
+    if (isMatch) {
+      return React.createElement(
+        "mark",
+        {
+          key: i,
+          className: "bg-aurora-cyan/35 text-aurora-cyan font-bold px-0.5 rounded shadow-[0_0_8px_rgba(56,189,248,0.4)]",
+        },
+        part
+      );
+    }
+    return part;
+  });
+}
+
 export function calculateReadingMetrics(text: string | null | undefined) {
   if (!text || !text.trim()) {
     return { words: 0, characters: 0, readingTimeMinutes: 1 };
