@@ -803,6 +803,9 @@ export function UserProfileView({
               <label className="text-xs font-semibold text-white/90">Personal Bio</label>
               <textarea
                 rows={3}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="Tell your story or document your memory journey..."
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}

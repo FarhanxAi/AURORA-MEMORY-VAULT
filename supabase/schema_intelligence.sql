@@ -3,27 +3,7 @@
 -- Execute this SQL script in your Supabase SQL Editor (https://supabase.com/dashboard)
 -- ==============================================================================
 
--- 1. SEARCH HISTORY TABLE
-CREATE TABLE IF NOT EXISTS public.search_history (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    query TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
 
-ALTER TABLE public.search_history ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can view their own search history" ON public.search_history;
-CREATE POLICY "Users can view their own search history"
-    ON public.search_history FOR SELECT USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert their own search history" ON public.search_history;
-CREATE POLICY "Users can insert their own search history"
-    ON public.search_history FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can delete their own search history" ON public.search_history;
-CREATE POLICY "Users can delete their own search history"
-    ON public.search_history FOR DELETE USING (auth.uid() = user_id);
 
 
 -- 2. RECENT ACTIVITY TABLE
@@ -75,6 +55,5 @@ CREATE POLICY "Users can delete their own pinned collections"
 
 
 -- INDEXES FOR PERFORMANCE & FAST RETRIEVAL
-CREATE INDEX IF NOT EXISTS idx_search_history_user_time ON public.search_history(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_recent_activity_user_time ON public.recent_activity(user_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_pinned_collections_user ON public.pinned_collections(user_id);

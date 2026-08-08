@@ -64,8 +64,7 @@ export function AccountManagementView({ user }: AccountManagementViewProps) {
       // 3. Delete user collections
       await supabase.from("collections").delete().eq("user_id", user.id);
 
-      // 4. Delete search history & activity
-      await supabase.from("search_history").delete().eq("user_id", user.id);
+      // 4. Delete recent activity and settings
       await supabase.from("recent_activity").delete().eq("user_id", user.id);
       await supabase.from("pinned_collections").delete().eq("user_id", user.id);
       await supabase.from("user_settings").delete().eq("user_id", user.id);
@@ -192,6 +191,9 @@ export function AccountManagementView({ user }: AccountManagementViewProps) {
 
             <input
               type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder='Type "DELETE"'
               value={deleteConfirmationText}
               onChange={(e) => setDeleteConfirmationText(e.target.value)}

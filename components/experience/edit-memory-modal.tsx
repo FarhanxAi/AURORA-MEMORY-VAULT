@@ -226,6 +226,9 @@ export function EditMemoryModal({
                   <div className="mt-2">
                     <input
                       type="text"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder="Enter your custom category..."
                       value={customCategoryInput}
                       onChange={(e) => {
@@ -247,6 +250,9 @@ export function EditMemoryModal({
               </label>
               <textarea
                 rows={5}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 value={description}
                 onChange={(e) => {
                   setDescription(e.target.value);

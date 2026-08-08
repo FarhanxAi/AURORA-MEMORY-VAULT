@@ -66,13 +66,6 @@ class VaultPersistenceEngine {
       const userMemories = memories.filter((m) => !m.user_id || m.user_id === userId);
       const key = `aurora_memories_${userId}`;
       localStorage.setItem(key, JSON.stringify(userMemories));
-
-      // Extract and namespace user-specific tags & locations for isolated autocomplete
-      const userTags = Array.from(new Set(userMemories.flatMap((m) => m.tags || []).filter(Boolean)));
-      const userLocations = Array.from(new Set(userMemories.map((m) => m.location?.trim()).filter(Boolean) as string[]));
-
-      this.saveUserTags(userId, userTags);
-      this.saveUserLocations(userId, userLocations);
     } catch (err) {
       console.warn("VaultStore saveMemories notice:", err);
     }
@@ -119,53 +112,6 @@ class VaultPersistenceEngine {
     } catch (err) {
       console.warn("VaultStore deleteMemoryItem notice:", err);
     }
-  }
-
-  // --- USER ISOLATED AUTOCOMPLETE SUGGESTIONS ---
-  saveUserTags(userId: string, tags: string[]): void {
-    if (!this.isClient || !userId) return;
-    try {
-      const key = `aurora_tags_${userId}`;
-      const unique = Array.from(new Set(tags.filter(Boolean)));
-      localStorage.setItem(key, JSON.stringify(unique));
-    } catch (err) {
-      console.warn("VaultStore saveUserTags notice:", err);
-    }
-  }
-
-  getUserTags(userId: string): string[] {
-    if (!this.isClient || !userId) return [];
-    try {
-      const key = `aurora_tags_${userId}`;
-      const raw = localStorage.getItem(key);
-      if (raw) return JSON.parse(raw) as string[];
-    } catch (err) {
-      console.warn("VaultStore getUserTags notice:", err);
-    }
-    return [];
-  }
-
-  saveUserLocations(userId: string, locations: string[]): void {
-    if (!this.isClient || !userId) return;
-    try {
-      const key = `aurora_locations_${userId}`;
-      const unique = Array.from(new Set(locations.filter(Boolean)));
-      localStorage.setItem(key, JSON.stringify(unique));
-    } catch (err) {
-      console.warn("VaultStore saveUserLocations notice:", err);
-    }
-  }
-
-  getUserLocations(userId: string): string[] {
-    if (!this.isClient || !userId) return [];
-    try {
-      const key = `aurora_locations_${userId}`;
-      const raw = localStorage.getItem(key);
-      if (raw) return JSON.parse(raw) as string[];
-    } catch (err) {
-      console.warn("VaultStore getUserLocations notice:", err);
-    }
-    return [];
   }
 
   // --- LOGOUT / ACCOUNT SWITCH CLEANUP ---

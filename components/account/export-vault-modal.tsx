@@ -409,6 +409,9 @@ export function ExportVaultModal({
                 </p>
                 <input
                   type="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder='Type "DELETE" to confirm'
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}

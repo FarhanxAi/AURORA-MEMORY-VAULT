@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -12,15 +12,18 @@ import {
   Lock,
   Trash2,
   Volume2,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
 } from "lucide-react";
 import { GlassButton } from "@/components/ui/glass-button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { SmartImageViewer } from "@/components/ui/smart-image-viewer";
 import { Memory } from "@/lib/types";
 import { JournalReaderView } from "@/components/experience/journal-reader-view";
-import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/toast-context";
 import { getSafeMood, formatJournalDateTime } from "@/lib/journal-utils";
+import { getAllMemoryImageUrls } from "@/lib/image-utils";
 
 interface MemoryDetailModalProps {
   memory: Memory | null;
@@ -37,6 +40,11 @@ export function MemoryDetailModal({
 }: MemoryDetailModalProps) {
   const { success, error } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+
+  const allImages = useMemo(() => {
+    return memory ? getAllMemoryImageUrls(memory) : [];
+  }, [memory]);
 
   if (!memory) return null;
 
@@ -60,6 +68,7 @@ export function MemoryDetailModal({
   };
 
   const safeMood = getSafeMood(memory?.mood);
+  const activeImageSource = allImages.length > 0 ? allImages[selectedImageIndex] : memory.cover_image;
 
   return (
     <ErrorBoundary fallbackTitle="Memory Detail Failed to Load">
@@ -100,13 +109,74 @@ export function MemoryDetailModal({
               </button>
             </div>
 
-            {/* Cover Media Header if Present */}
-            {(memory?.cover_image || memory?.memory_type === "photo") && (
-              <div className="relative w-full h-72 sm:h-96 rounded-2xl overflow-hidden border border-white/15">
-                <SmartImageViewer
-                  memoryOrPath={memory}
-                  alt={memory?.title || "Cover Image"}
-                />
+            {/* Multi-Image Display & Navigation */}
+            {(allImages.length > 0 || memory?.cover_image || memory?.memory_type === "photo") && (
+              <div className="space-y-3">
+                <div className="relative w-full h-72 sm:h-96 rounded-2xl overflow-hidden border border-white/15 bg-black/40">
+                  <SmartImageViewer
+                    key={activeImageSource || "cover"}
+                    memoryOrPath={activeImageSource}
+                    alt={memory?.title || "Memory Photo"}
+                  />
+
+                  {/* Multi-Image Navigation Arrows on Main Canvas */}
+                  {allImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1));
+                        }}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 transition-all cursor-pointer z-10"
+                        title="Previous Image"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedImageIndex((prev) => (prev < allImages.length - 1 ? prev + 1 : 0));
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 transition-all cursor-pointer z-10"
+                        title="Next Image"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+
+                      <div className="absolute top-3 left-3 z-10 px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20 text-[11px] font-bold text-white shadow-lg flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-aurora-cyan" />
+                        <span>Photo {selectedImageIndex + 1} of {allImages.length}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Multi-Image Thumbnail Gallery Strip */}
+                {allImages.length > 1 && (
+                  <div className="flex items-center gap-2 overflow-x-auto p-2 rounded-2xl bg-white/[0.02] border border-white/10 scrollbar-none">
+                    {allImages.map((imgUrl, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedImageIndex(idx)}
+                        className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${
+                          selectedImageIndex === idx
+                            ? "border-aurora-cyan shadow-[0_0_15px_rgba(56,189,248,0.4)] scale-105"
+                            : "border-white/10 opacity-60 hover:opacity-100 hover:border-white/30"
+                        }`}
+                      >
+                        <img
+                          src={imgUrl}
+                          alt={`Thumbnail ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

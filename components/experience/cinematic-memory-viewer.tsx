@@ -23,6 +23,8 @@ import { Memory } from "@/lib/types";
 import { useToast } from "@/lib/toast-context";
 import { getSafeMood, formatJournalDateTime } from "@/lib/journal-utils";
 
+import { getAllMemoryImageUrls } from "@/lib/image-utils";
+
 interface CinematicMemoryViewerProps {
   memory: Memory | null;
   allMemories: Memory[];
@@ -45,6 +47,16 @@ export function CinematicMemoryViewer({
   const { success } = useToast();
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+
+  const allImages = useMemo(() => {
+    return memory ? getAllMemoryImageUrls(memory) : [];
+  }, [memory]);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+    setZoomLevel(1);
+  }, [memory?.id]);
 
   const activeList = useMemo(
     () => (Array.isArray(allMemories) ? allMemories.filter((m) => m && !m.deleted) : []),
@@ -168,20 +180,76 @@ export function CinematicMemoryViewer({
                 </div>
               ) : (
                 /* HIGH RESOLUTION IMAGE CANVAS AREA WITH SMART VIEWER & SKELETON LOADER */
-                <div className="relative w-full h-full flex items-center justify-center min-h-[320px] lg:min-h-[550px] overflow-hidden group">
-                  <SmartImageViewer
-                    memoryOrPath={memory}
-                    alt={memory?.title || "Memory Image"}
-                    zoomLevel={zoomLevel}
-                    onToggleZoom={toggleZoom}
-                  />
+                <div className="relative w-full h-full flex flex-col items-center justify-center min-h-[320px] lg:min-h-[550px] overflow-hidden group">
+                  <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden">
+                    <SmartImageViewer
+                      key={allImages[selectedImageIndex] || memory?.cover_image || "img"}
+                      memoryOrPath={allImages[selectedImageIndex] || memory}
+                      alt={memory?.title || "Memory Image"}
+                      zoomLevel={zoomLevel}
+                      onToggleZoom={toggleZoom}
+                    />
 
-                  {/* Format Badge Overlay */}
-                  <div className="absolute top-4 left-4 flex items-center gap-2 z-30 pointer-events-none">
-                    <span className="px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20 text-xs font-bold text-aurora-cyan uppercase tracking-wider shadow-lg">
-                      {memory?.memory_type || "Photo"}
-                    </span>
+                    {/* Multi-Image Prev/Next Controls on Canvas */}
+                    {allImages.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1));
+                          }}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 transition-all cursor-pointer z-30"
+                          title="Previous Photo"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImageIndex((prev) => (prev < allImages.length - 1 ? prev + 1 : 0));
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 transition-all cursor-pointer z-30"
+                          title="Next Photo"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                      </>
+                    )}
+
+                    {/* Format Badge Overlay */}
+                    <div className="absolute top-4 left-4 flex items-center gap-2 z-30 pointer-events-none">
+                      <span className="px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20 text-xs font-bold text-aurora-cyan uppercase tracking-wider shadow-lg">
+                        {allImages.length > 1 ? `Photo ${selectedImageIndex + 1} of ${allImages.length}` : (memory?.memory_type || "Photo")}
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Multi-Image Thumbnail Selector Strip */}
+                  {allImages.length > 1 && (
+                    <div className="w-full flex items-center justify-center gap-2 p-3 bg-black/60 backdrop-blur-md border-t border-white/10 overflow-x-auto scrollbar-none z-20">
+                      {allImages.map((imgUrl, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedImageIndex(idx)}
+                          className={`relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${
+                            selectedImageIndex === idx
+                              ? "border-aurora-cyan shadow-[0_0_12px_rgba(56,189,248,0.5)] scale-105"
+                              : "border-white/15 opacity-60 hover:opacity-100 hover:border-white/30"
+                          }`}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Photo ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

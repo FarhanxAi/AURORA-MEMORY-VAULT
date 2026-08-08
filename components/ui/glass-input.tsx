@@ -34,6 +34,9 @@ export const GlassInput = forwardRef<HTMLInputElement, GlassInputProps>(
           <input
             id={inputId}
             ref={ref}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             className={cn(
               "w-full rounded-2xl py-3.5 px-4 text-sm text-white placeholder-white/30",
               "bg-white/[0.04] backdrop-blur-xl border border-white/12 shadow-glass-sm",

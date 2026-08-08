@@ -153,6 +153,9 @@ export function UnifiedTimelineGallery({
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
               <input
                 type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="Search title, tag, mood, location, date..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

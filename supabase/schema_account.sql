@@ -3,10 +3,9 @@
 -- Execute this SQL script in your Supabase SQL Editor (https://supabase.com/dashboard)
 -- ==============================================================================
 
--- 1. EXTEND PROFILES TABLE WITH BIO, TIMEZONE & LANGUAGE
+-- 1. EXTEND PROFILES TABLE WITH BIO & TIMEZONE
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bio TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en';
 
 -- 2. USER SETTINGS TABLE
 CREATE TABLE IF NOT EXISTS public.user_settings (

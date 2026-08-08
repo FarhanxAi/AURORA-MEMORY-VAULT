@@ -538,6 +538,9 @@ export function InsightsDashboard({
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="Search photo memories..."
                   value={photoSearch}
                   onChange={(e) => setPhotoSearch(e.target.value)}
@@ -601,6 +604,9 @@ export function InsightsDashboard({
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="Search journal notes..."
                   value={journalSearch}
                   onChange={(e) => setJournalSearch(e.target.value)}

@@ -92,17 +92,6 @@ export function CreateMemoryModal({
     }
   }, [isOpen, defaultType]);
 
-  // Strict User Isolated Autocomplete Suggestions (no cross-account leakage)
-  const userIsolatedTags = useMemo(() => {
-    if (!activeUserId) return [];
-    return vaultStore.getUserTags(activeUserId);
-  }, [activeUserId]);
-
-  const userIsolatedLocations = useMemo(() => {
-    if (!activeUserId) return [];
-    return vaultStore.getUserLocations(activeUserId);
-  }, [activeUserId]);
-
   // Combined size calculation
   const totalImagesSizeBytes = useMemo(() => {
     return imageItems.reduce((acc, item) => acc + item.file.size, 0);
@@ -336,63 +325,59 @@ export function CreateMemoryModal({
         });
       };
 
-      // Upload Images to 'memory-images' bucket
+      // Upload All Images to 'memory-images' bucket in parallel with guaranteed zero loss
       if (imageItems.length > 0) {
         setUploadProgress(30);
 
-        for (let i = 0; i < imageItems.length; i++) {
-          const item = imageItems[i];
-          const fileExt = item.file.name.split(".").pop() || "jpg";
-          const filePath = `${userId}/${Date.now()}-${i}_img.${fileExt}`;
-
-          console.log(`[STORAGE_DIAGNOSTIC] STEP 1: Uploading image ${i + 1}/${imageItems.length} | Bucket: ${MEMORY_IMAGE_BUCKET} | Path: ${filePath}`);
+        const uploadPromises = imageItems.map(async (item, i) => {
+          const fileExt = item.file.name.split(".").pop()?.toLowerCase() || "jpg";
+          const uniqueId = Math.random().toString(36).substring(2, 8);
+          const filePath = `${userId}/${Date.now()}_${i}_${uniqueId}.${fileExt}`;
 
           try {
-            // STEP 1: Upload to Supabase Storage Bucket
             const { data: uploadData, error: uploadErr } = await supabase.storage
               .from(MEMORY_IMAGE_BUCKET)
               .upload(filePath, item.file, { upsert: true });
 
-            if (!uploadErr) {
-              const storagePath = uploadData?.path || filePath;
-              console.log(`[STORAGE_DIAGNOSTIC] STEP 2 & 3: Upload Succeeded | Storage Path Captured: ${storagePath}`);
-              
-              if (i === 0) {
-                coverImageUrl = storagePath;
-              } else {
-                uploadedGalleryUrls.push(storagePath);
-              }
-
-              // Asynchronous background verification check without blocking DB save
-              verifyStorageObjectExists(MEMORY_IMAGE_BUCKET, storagePath).then((exists) => {
-                if (!exists) {
-                  console.warn(`[STORAGE_DIAGNOSTIC] Verification notice for path: ${storagePath}`);
-                }
-              });
-            } else {
-              console.warn("[STORAGE_DIAGNOSTIC] Storage Upload Notice (using persistent base64 fallback):", uploadErr.message);
-              const base64Url = await fileToBase64(item.file);
-              if (base64Url) {
-                if (i === 0) coverImageUrl = base64Url;
-                else uploadedGalleryUrls.push(base64Url);
-              }
+            if (!uploadErr && uploadData?.path) {
+              return uploadData.path;
             }
-          } catch (e) {
-            console.warn("[STORAGE_DIAGNOSTIC] Storage upload exception:", e);
+            // Fallback to base64 data URL
             const base64Url = await fileToBase64(item.file);
-            if (base64Url) {
-              if (i === 0) coverImageUrl = base64Url;
-              else uploadedGalleryUrls.push(base64Url);
-            }
+            return base64Url || filePath;
+          } catch {
+            const base64Url = await fileToBase64(item.file);
+            return base64Url || filePath;
           }
+        });
 
-          setUploadProgress(30 + Math.floor(((i + 1) / imageItems.length) * 50));
+        const uploadResults = await Promise.allSettled(uploadPromises);
+        const resolvedPaths: string[] = [];
+
+        for (let i = 0; i < uploadResults.length; i++) {
+          const res = uploadResults[i];
+          if (res.status === "fulfilled" && res.value) {
+            resolvedPaths.push(res.value);
+          } else {
+            // Guarantee fallback for any rejected promise
+            const fallback = await fileToBase64(imageItems[i].file);
+            if (fallback) resolvedPaths.push(fallback);
+          }
+        }
+
+        if (resolvedPaths.length > 0) {
+          coverImageUrl = resolvedPaths[0];
+          for (let k = 1; k < resolvedPaths.length; k++) {
+            uploadedGalleryUrls.push(resolvedPaths[k]);
+          }
         }
 
         // Guaranteed persistent fallback if cover image is missing
         if (!coverImageUrl && imageItems[0]) {
           coverImageUrl = await fileToBase64(imageItems[0].file);
         }
+
+        setUploadProgress(80);
       }
 
       const now = new Date();
@@ -588,6 +573,9 @@ export function CreateMemoryModal({
                   <div className="mt-2">
                     <input
                       type="text"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder="Enter your custom category..."
                       value={customCategoryInput}
                       onChange={(e) => {
@@ -634,6 +622,7 @@ export function CreateMemoryModal({
                       accept="image/jpeg,image/jpg,image/png,image/webp"
                       onChange={(e) => {
                         if (e.target.files) addImageFiles(e.target.files);
+                        e.target.value = "";
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                     />
@@ -761,20 +750,15 @@ export function CreateMemoryModal({
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     placeholder="Add tag and press enter..."
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={handleAddTag}
-                    list={`user-tags-${activeUserId || "guest"}`}
                     className="flex-1 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan"
                   />
-                  {userIsolatedTags.length > 0 && (
-                    <datalist id={`user-tags-${activeUserId || "guest"}`}>
-                      {userIsolatedTags.map((t) => (
-                        <option key={t} value={t} />
-                      ))}
-                    </datalist>
-                  )}
                   <button
                     type="button"
                     onClick={handleAddTag}
@@ -809,15 +793,7 @@ export function CreateMemoryModal({
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   leftIcon={<MapPin className="w-4 h-4" />}
-                  list={`user-locations-${activeUserId || "guest"}`}
                 />
-                {userIsolatedLocations.length > 0 && (
-                  <datalist id={`user-locations-${activeUserId || "guest"}`}>
-                    {userIsolatedLocations.map((loc) => (
-                      <option key={loc} value={loc} />
-                    ))}
-                  </datalist>
-                )}
               </div>
             </div>
 

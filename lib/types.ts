@@ -86,13 +86,6 @@ export interface NotificationItem {
   read: boolean;
 }
 
-export interface SearchHistoryItem {
-  id: string;
-  user_id: string;
-  query: string;
-  created_at: string;
-}
-
 export interface RecentActivityItem {
   id: string;
   user_id: string;

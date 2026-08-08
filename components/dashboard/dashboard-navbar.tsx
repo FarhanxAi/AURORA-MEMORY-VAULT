@@ -66,6 +66,9 @@ export function DashboardNavbar({
           <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             placeholder="Search memories by title, tags, category..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}

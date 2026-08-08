@@ -102,8 +102,15 @@ export const MemoryCard = React.memo(function MemoryCard({
             </div>
           )}
 
-          {/* Overlay Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#030712] via-transparent to-black/20 pointer-events-none" />
+          {/* Multi-Photo Count Badge */}
+          {Array.isArray(memory.gallery) && memory.gallery.length > 0 && (
+            <div className="absolute bottom-3 left-3 z-10">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20 text-[10px] font-bold text-white shadow-lg">
+                <ImageIcon className="w-3 h-3 text-aurora-cyan" />
+                <span>{memory.gallery.length + 1} Photos</span>
+              </span>
+            </div>
+          )}
 
           {/* Favorite Button Overlay (Top Right) */}
           <div className="absolute top-3 right-3 z-10">

@@ -381,6 +381,9 @@ export function TrashArchiveView({
             <Search className="w-3.5 h-3.5 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder="Search Trash..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
