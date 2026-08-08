@@ -86,140 +86,19 @@ export async function reconcileAndMigrateUserAccount(
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // STEP 2: SCAN LOCAL STORAGE ON THIS DEVICE FOR UN-SYNCED OR GUEST MEMORIES
+  // STEP 2: PURGE ALL OBSOLETE / LEGACY GUEST STORAGE KEYS
   // ─────────────────────────────────────────────────────────────────────────────
   if (typeof window !== "undefined" && window.localStorage) {
     try {
-      const localCandidateMemories: Memory[] = [];
-
-      // Scan all possible localStorage keys where local memories could reside
-      const targetKeys = [
-        `aurora_memories_${userId}`,
-        "aurora_memories_guest-vault-user",
-        "aurora_memories",
-        "aurora_local_memories",
-        "aurora_vault_memories",
-        "vault_memories",
-      ];
-
-      // Also scan any existing keys starting with aurora_memories_
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith("aurora_memories_") && !targetKeys.includes(k)) {
-          targetKeys.push(k);
-        }
-      }
-
-      for (const storageKey of targetKeys) {
-        const raw = localStorage.getItem(storageKey);
-        if (!raw) continue;
-
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            for (const item of parsed) {
-              if (item && typeof item === "object" && item.title) {
-                localCandidateMemories.push(item as Memory);
-              }
-            }
-          }
-        } catch {
-          // Ignore parse errors on corrupt storage keys
-        }
-      }
-
-      // Find local memories that do NOT exist in Supabase cloud yet
-      const missingFromCloud: Memory[] = [];
-
-      for (const localMem of localCandidateMemories) {
-        if (!localMem || !localMem.title) continue;
-
-        // Check if ID exists in cloud
-        if (localMem.id && cloudMap.has(localMem.id)) {
-          continue;
-        }
-
-        // Check for content match (same title + date + memory_type)
-        const localSig = `${localMem.title.trim().toLowerCase()}_${localMem.memory_date || ""}_${localMem.memory_type || "photo"}`;
-        let alreadyInCloud = false;
-
-        for (const cloudMem of cloudMap.values()) {
-          const cloudSig = `${cloudMem.title.trim().toLowerCase()}_${cloudMem.memory_date || ""}_${cloudMem.memory_type || "photo"}`;
-          if (localSig === cloudSig) {
-            alreadyInCloud = true;
-            break;
-          }
-        }
-
-        if (!alreadyInCloud) {
-          missingFromCloud.push(localMem);
-        }
-      }
-
-      // Safely migrate and upload local-only memories to Supabase Cloud
-      if (missingFromCloud.length > 0) {
-        console.log(`[RECONCILIATION] Migrating ${missingFromCloud.length} local device memories to Supabase Cloud...`);
-
-        for (const unSynced of missingFromCloud) {
-          const cleanId = unSynced.id && !unSynced.id.startsWith("demo-") && !unSynced.id.startsWith("guest-")
-            ? unSynced.id
-            : `mem-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
-          const nowIso = new Date().toISOString();
-          const insertPayload = {
-            id: cleanId,
-            user_id: userId,
-            title: unSynced.title.trim(),
-            description: unSynced.description || null,
-            memory_type: unSynced.memory_type || "photo",
-            category: unSynced.category || "Personal",
-            cover_image: unSynced.cover_image || null,
-            gallery: Array.isArray(unSynced.gallery) ? unSynced.gallery : [],
-            audio_url: unSynced.audio_url || null,
-            tags: Array.isArray(unSynced.tags) ? unSynced.tags : [],
-            location: unSynced.location || null,
-            mood: unSynced.mood || "Happy",
-            favorite: Boolean(unSynced.favorite),
-            archived: Boolean(unSynced.archived),
-            deleted: Boolean(unSynced.deleted),
-            deleted_at: unSynced.deleted_at || null,
-            memory_date: unSynced.memory_date || nowIso.split("T")[0],
-            created_at: unSynced.created_at || nowIso,
-            updated_at: nowIso,
-            file_size: unSynced.file_size || 0,
-            private: true,
-          };
-
-          try {
-            const { data: inserted, error: insertErr } = await supabase
-              .from("memories")
-              .insert([insertPayload])
-              .select("*")
-              .maybeSingle();
-
-            if (!insertErr && inserted) {
-              cloudMap.set(inserted.id, inserted as Memory);
-              migratedLocalCount++;
-            } else if (insertErr) {
-              console.warn("[RECONCILIATION] Local insert notice:", insertErr.message);
-              // Keep memory in memory list even if network failed so user doesn't lose data
-              cloudMap.set(cleanId, insertPayload as Memory);
-            }
-          } catch (insertEx) {
-            console.warn("[RECONCILIATION] Local insert exception:", insertEx);
-            cloudMap.set(cleanId, insertPayload as Memory);
-          }
-        }
-      }
-
-      // Clean up legacy un-namespaced keys so test accounts and future accounts remain completely clean
+      // Purge any legacy un-namespaced keys so stale test memories can never resurface
       localStorage.removeItem("aurora_memories_guest-vault-user");
       localStorage.removeItem("aurora_local_memories");
       localStorage.removeItem("aurora_memories");
       localStorage.removeItem("aurora_vault_memories");
       localStorage.removeItem("vault_memories");
-    } catch (localScanErr) {
-      console.warn("[RECONCILIATION] Local scan warning:", localScanErr);
+      localStorage.removeItem("aurora_guest_memories");
+    } catch (localPurgeErr) {
+      console.warn("[RECONCILIATION] Local purge warning:", localPurgeErr);
     }
   }
 

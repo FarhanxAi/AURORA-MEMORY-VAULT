@@ -254,7 +254,10 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
       setCollections([]);
       setUser(null);
 
-      // Clear session caches, autocomplete caches, and cookies
+      // Clear session caches, user storage keys, and cookies
+      if (user?.id) {
+        vaultStore.deleteUserVault(user.id);
+      }
       vaultStore.clearSessionCachesOnLogout();
 
       if (typeof document !== "undefined") {
