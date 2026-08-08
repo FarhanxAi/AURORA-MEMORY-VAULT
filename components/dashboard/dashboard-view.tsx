@@ -84,7 +84,7 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
         id: Math.random().toString(36).substring(2, 9),
         title,
         message,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
         type,
         read: false,
       };

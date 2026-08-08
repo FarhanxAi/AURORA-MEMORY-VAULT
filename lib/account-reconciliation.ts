@@ -124,32 +124,71 @@ export async function reconcileAndMigrateUserAccount(
   const cachedProfile = vaultStore.getProfile(userId);
   const nowStr = new Date().toISOString();
 
-  const finalProfile: UserProfile = {
-    id: userId,
-    email: authUser.email || profileData?.email || cachedProfile?.email || "",
-    full_name:
-      profileData?.full_name ||
-      cachedProfile?.full_name ||
-      authUser.user_metadata?.full_name ||
-      authUser.user_metadata?.name ||
-      "Memory Collector",
-    avatar_url:
-      profileData?.avatar_url ||
-      cachedProfile?.avatar_url ||
-      authUser.user_metadata?.avatar_url ||
-      "",
-    bio: profileData?.bio || cachedProfile?.bio || "",
-    timezone: profileData?.timezone || cachedProfile?.timezone || "UTC",
-    created_at: profileData?.created_at || cachedProfile?.created_at || authUser.created_at || nowStr,
-    updated_at: nowStr,
-    last_login: nowStr,
-  };
+  // finalProfile represents what is shown in the UI.
+  // RULE: Cloud (profileData) is ALWAYS the source of truth.
+  // If it exists, use it exactly. Local cache is ONLY a display fallback
+  // when network is unavailable — it NEVER overwrites cloud data.
+  const finalProfile: UserProfile = profileData
+    ? {
+        // Cloud record is canonical — use it exactly as-is
+        ...(profileData as UserProfile),
+        // Keep last_login fresh for this session
+        last_login: nowStr,
+      }
+    : {
+        // No cloud record yet (first login) — bootstrap from Google OAuth metadata
+        id: userId,
+        email: authUser.email || cachedProfile?.email || "",
+        full_name:
+          cachedProfile?.full_name ||
+          authUser.user_metadata?.full_name ||
+          authUser.user_metadata?.name ||
+          "Memory Collector",
+        avatar_url:
+          cachedProfile?.avatar_url ||
+          authUser.user_metadata?.avatar_url ||
+          "",
+        bio: cachedProfile?.bio || "",
+        timezone: cachedProfile?.timezone || "UTC",
+        created_at: cachedProfile?.created_at || authUser.created_at || nowStr,
+        updated_at: nowStr,
+        last_login: nowStr,
+      };
 
-  // Upsert profile in Supabase cloud
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PROFILE STRATEGY:
+  // - If profile already exists in Supabase: ONLY update last_login + updated_at.
+  //   NEVER overwrite user's custom full_name or avatar_url.
+  // - If no profile exists yet: create a new one with Google metadata as defaults.
+  // ─────────────────────────────────────────────────────────────────────────────
   try {
-    await supabase.from("profiles").upsert(finalProfile);
+    if (profileData) {
+      // Existing profile — preserve all user customizations, only touch timestamps
+      await supabase
+        .from("profiles")
+        .update({ last_login: nowStr, updated_at: nowStr })
+        .eq("id", userId);
+    } else {
+      // First login — create profile with Google metadata as starting defaults
+      const newProfile = {
+        id: userId,
+        email: authUser.email || "",
+        full_name:
+          authUser.user_metadata?.full_name ||
+          authUser.user_metadata?.name ||
+          "Memory Collector",
+        avatar_url: authUser.user_metadata?.avatar_url || "",
+        bio: "",
+        timezone: "UTC",
+        created_at: authUser.created_at || nowStr,
+        updated_at: nowStr,
+        last_login: nowStr,
+      };
+      const { error: insertErr } = await supabase.from("profiles").upsert(newProfile, { onConflict: "id", ignoreDuplicates: true });
+      if (insertErr) console.warn("[RECONCILIATION] Profile creation notice:", insertErr);
+    }
   } catch (upsertErr) {
-    console.warn("[RECONCILIATION] Profile upsert notice:", upsertErr);
+    console.warn("[RECONCILIATION] Profile update notice:", upsertErr);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
