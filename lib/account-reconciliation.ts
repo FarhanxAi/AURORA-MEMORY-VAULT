@@ -212,9 +212,12 @@ export async function reconcileAndMigrateUserAccount(
         }
       }
 
-      // Clean up legacy guest keys after successful cloud synchronization
+      // Clean up legacy un-namespaced keys so test accounts and future accounts remain completely clean
       localStorage.removeItem("aurora_memories_guest-vault-user");
       localStorage.removeItem("aurora_local_memories");
+      localStorage.removeItem("aurora_memories");
+      localStorage.removeItem("aurora_vault_memories");
+      localStorage.removeItem("vault_memories");
     } catch (localScanErr) {
       console.warn("[RECONCILIATION] Local scan warning:", localScanErr);
     }
