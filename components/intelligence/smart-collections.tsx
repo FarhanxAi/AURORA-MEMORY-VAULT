@@ -276,7 +276,7 @@ export function SmartCollections({
               {/* Background Art Overlay if preview available */}
               {previewCover && (
                 <div className="absolute inset-0 z-0 opacity-15 group-hover:opacity-25 transition-opacity">
-                  <img src={previewCover} alt="" className="w-full h-full object-cover blur-sm" />
+                  <img src={previewCover} alt="Collection preview cover" className="w-full h-full object-cover blur-sm" />
                 </div>
               )}
 
