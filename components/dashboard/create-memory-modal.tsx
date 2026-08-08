@@ -494,8 +494,6 @@ export function CreateMemoryModal({
         file_size: memoryType === "journal" ? 0 : totalUploadedBytes,
       };
 
-      let finalMemory: Memory | null = null;
-
       const { data: insertedData, error: dbError } = await supabase
         .from("memories")
         .insert([newRecord])
@@ -503,25 +501,16 @@ export function CreateMemoryModal({
         .single();
 
       if (dbError) {
-        console.error("Database insert error:", dbError.message);
+        console.error("[MEMORY INSERT ERROR]", dbError.message, dbError);
         throw new Error(`Database error: ${dbError.message}`);
       }
 
-      if (insertedData) {
-        finalMemory = insertedData as Memory;
+      if (!insertedData) {
+        throw new Error("Memory insert returned no data — the write may have been blocked by RLS. Please check your session.");
       }
 
-      if (!finalMemory) {
-        finalMemory = {
-          ...newRecord,
-          id: `mem-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          archived: false,
-          deleted: false,
-          deleted_at: null,
-        };
-      }
+      const finalMemory: Memory = insertedData as Memory;
+      console.log("[MEMORY SAVED TO CLOUD] id:", finalMemory.id, "user_id:", finalMemory.user_id);
 
       setUploadProgress(100);
       setUploadStatusText("Memory Saved!");
@@ -547,23 +536,32 @@ export function CreateMemoryModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-        {/* Backdrop */}
+      {/* Scrollable viewport — lets the modal scroll naturally on small/mobile screens */}
+      <div
+        className="fixed inset-0 z-50 overflow-y-auto overscroll-none"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
+        {/* Backdrop: pointer-events-none so it never swallows touch events inside modal */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/80 backdrop-blur-xl"
+          className="fixed inset-0 bg-black/80 backdrop-blur-xl pointer-events-none"
         />
 
+        {/* Centering wrapper — tapping empty space around modal closes it */}
+        <div
+          className="flex min-h-full items-center justify-center p-4 py-6"
+          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
         {/* Modal Window */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-3xl glass-panel rounded-3xl p-6 sm:p-8 border border-white/20 shadow-2xl z-10 max-h-[90vh] overflow-y-auto"
+          className="relative w-full max-w-3xl glass-panel rounded-3xl p-4 sm:p-8 border border-white/20 shadow-2xl z-10"
+          style={{ touchAction: "pan-y" }}
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
@@ -1070,6 +1068,7 @@ export function CreateMemoryModal({
             </div>
           </form>
         </motion.div>
+        </div>
       </div>
     </AnimatePresence>
   );

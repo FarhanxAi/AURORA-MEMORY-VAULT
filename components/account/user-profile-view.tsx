@@ -408,17 +408,22 @@ export function UserProfileView({
       if (!blob) throw new Error("Image compression export failed.");
 
       const supabase = createClient();
-      const newAvatarUrl = await uploadAvatarToStorage(supabase, user.id, blob);
 
-      setAvatarUrl(newAvatarUrl);
-      const updatedProfileWithAvatar = { ...user, avatar_url: newAvatarUrl };
-      vaultStore.saveProfile(user.id, updatedProfileWithAvatar);
+      // Re-verify active session before writing
+      const { data: authCheck } = await supabase.auth.getUser();
+      const authUserId = authCheck?.user?.id;
+      if (!authUserId || authUserId !== user.id) {
+        error("Session Error", "Your session has expired. Please sign in again.");
+        return;
+      }
 
-      // Upsert profiles table in database
+      const newAvatarUrl = await uploadAvatarToStorage(supabase, authUserId, blob);
+
+      // Upsert profiles table in database FIRST, then update local state only if cloud write succeeded
       const { error: updateErr } = await supabase
         .from("profiles")
         .upsert({
-          id: user.id,
+          id: authUserId,
           email: user.email,
           full_name: fullName || user.full_name,
           avatar_url: newAvatarUrl,
@@ -426,14 +431,20 @@ export function UserProfileView({
         });
 
       if (updateErr) {
-        console.warn("Avatar DB update notice:", updateErr);
+        console.error("[AVATAR SAVE ERROR]", updateErr.message, updateErr);
+        error("Photo Save Failed", `Could not save avatar to cloud: ${updateErr.message}`);
+        return;
       }
 
+      // Cloud write confirmed — now update local state
+      setAvatarUrl(newAvatarUrl);
+      const updatedProfileWithAvatar = { ...user, avatar_url: newAvatarUrl };
+      vaultStore.saveProfile(authUserId, updatedProfileWithAvatar);
       onProfileUpdated(updatedProfileWithAvatar);
       setIsCropModalOpen(false);
       if (cropPreviewUrl) URL.revokeObjectURL(cropPreviewUrl);
       fetchStorageBytes();
-      success("Profile Photo Updated", "Your profile image was cropped, optimized, and saved.");
+      success("Profile Photo Updated", "Your profile image was cropped, optimized, and saved to cloud.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to process photo";
       error("Photo Error", msg);
@@ -448,18 +459,33 @@ export function UserProfileView({
     setUploadingAvatar(true);
     try {
       const supabase = createClient();
-      await supabase
+
+      // Re-verify active session
+      const { data: authCheck } = await supabase.auth.getUser();
+      const authUserId = authCheck?.user?.id;
+      if (!authUserId || authUserId !== user.id) {
+        error("Session Error", "Your session has expired. Please sign in again.");
+        return;
+      }
+
+      const { error: delErr } = await supabase
         .from("profiles")
         .upsert({
-          id: user.id,
+          id: authUserId,
           email: user.email,
           avatar_url: "",
           updated_at: new Date().toISOString(),
         });
 
+      if (delErr) {
+        console.error("[AVATAR DELETE ERROR]", delErr.message);
+        error("Delete Failed", `Could not remove avatar from cloud: ${delErr.message}`);
+        return;
+      }
+
       setAvatarUrl("");
       const updatedProfileNoAvatar = { ...user, avatar_url: "" };
-      vaultStore.saveProfile(user.id, updatedProfileNoAvatar);
+      vaultStore.saveProfile(authUserId, updatedProfileNoAvatar);
       onProfileUpdated(updatedProfileNoAvatar);
       setIsCropModalOpen(false);
       if (cropPreviewUrl) URL.revokeObjectURL(cropPreviewUrl);
@@ -480,12 +506,21 @@ export function UserProfileView({
     setIsSaving(true);
     try {
       const supabase = createClient();
+
+      // Always re-verify the active authenticated user before writing
+      const { data: authRes } = await supabase.auth.getUser();
+      const authUserId = authRes?.user?.id;
+      if (!authUserId || authUserId !== user.id) {
+        error("Session Error", "Your session has expired. Please sign in again.");
+        return;
+      }
+
       const updatedIso = new Date().toISOString();
 
       const { error: upsertErr } = await supabase
         .from("profiles")
         .upsert({
-          id: user.id,
+          id: authUserId,
           email: user.email,
           full_name: fullName,
           bio,
@@ -493,24 +528,27 @@ export function UserProfileView({
           updated_at: updatedIso,
         });
 
-      const newProfile: UserProfile = {
-        ...user,
-        full_name: fullName,
-        bio,
-        avatar_url: avatarUrl,
-        updated_at: updatedIso,
-      };
+      if (upsertErr) {
+        console.error("[PROFILE SAVE ERROR]", upsertErr.message, upsertErr);
+        error("Save Failed", `Could not save profile to cloud: ${upsertErr.message}`);
+        return;
+      }
 
-      vaultStore.saveProfile(user.id, newProfile);
+      // Re-fetch from Supabase to confirm the write actually landed in cloud
+      const { data: confirmedProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", authUserId)
+        .maybeSingle();
+
+      const newProfile: UserProfile = confirmedProfile
+        ? (confirmedProfile as UserProfile)
+        : { ...user, full_name: fullName, bio, avatar_url: avatarUrl, updated_at: updatedIso };
+
+      vaultStore.saveProfile(authUserId, newProfile);
       onProfileUpdated(newProfile);
       setIsEditing(false);
-
-      if (upsertErr) {
-        console.warn("Profile save warning:", upsertErr);
-        info("Profile Updated", "Profile saved in session.");
-      } else {
-        success("Profile Saved", "Your profile changes were saved permanently.");
-      }
+      success("Profile Saved", "Your profile changes were permanently saved and verified in cloud.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save profile";
       error("Save Error", msg);
@@ -545,10 +583,24 @@ export function UserProfileView({
                 </div>
               )}
 
-              {/* Upload trigger overlay */}
-              <label className="absolute inset-0 rounded-3xl bg-[#030712]/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-xs font-semibold cursor-pointer transition-all duration-300 backdrop-blur-md">
+              {/* Upload trigger overlay — visible on hover (desktop) AND always visible on mobile touch */}
+              <label className="absolute inset-0 rounded-3xl bg-[#030712]/60 opacity-0 group-hover:opacity-100 sm:opacity-0 flex flex-col items-center justify-center text-white text-xs font-semibold cursor-pointer transition-all duration-300 backdrop-blur-md">
                 <Camera className="w-6 h-6 mb-1 text-aurora-cyan" />
                 <span>Change Photo</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </label>
+
+              {/* Mobile-always-visible camera badge — touch-friendly tap target */}
+              <label
+                className="sm:hidden absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-aurora-cyan flex items-center justify-center cursor-pointer shadow-lg border-2 border-[#090d16] z-10"
+                title="Change Photo"
+              >
+                <Camera className="w-4 h-4 text-[#030712]" />
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/*"
