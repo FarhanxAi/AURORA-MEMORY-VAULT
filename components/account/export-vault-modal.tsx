@@ -241,11 +241,10 @@ export function ExportVaultModal({
               <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 text-xs text-white/60 space-y-1.5">
                 <p className="font-semibold text-white/80">Your export will include:</p>
                 <ul className="space-y-0.5 pl-3">
-                  <li>• All original images named using Memory Titles (JPG, PNG, WEBP — no compression)</li>
-                  <li>• All journal entries as plain text (.txt) files — UTF-8</li>
-                  <li>• Human-readable Memory Details text card per memory (Memory Details/ folder)</li>
-                  <li>• README.txt with offline reading instructions</li>
-                  <li>• 100% universal offline compatibility (No JSON, no developer tools required)</li>
+                  <li>• Original clean photos named using Memory Titles (Images/ folder)</li>
+                  <li>• Complete journal text files with details at top (Journals/ folder)</li>
+                  <li>• Standalone companion viewer: Image at top with memory info below</li>
+                  <li>• 100% universal offline compatibility (No internet or login required)</li>
                 </ul>
               </div>
 
