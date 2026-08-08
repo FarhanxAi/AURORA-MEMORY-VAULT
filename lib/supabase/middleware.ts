@@ -65,10 +65,10 @@ export async function updateSession(request: NextRequest) {
       return supabaseResponse;
     }
 
-    // 800ms fast timeout race for auth check
+    // 3500ms safe timeout for mobile 4G/5G networks
     const userPromise = supabase.auth.getUser();
     const timeoutPromise = new Promise<{ data: { user: null }; error: null }>((resolve) =>
-      setTimeout(() => resolve({ data: { user: null }, error: null }), 800)
+      setTimeout(() => resolve({ data: { user: null }, error: null }), 3500)
     );
 
     const {

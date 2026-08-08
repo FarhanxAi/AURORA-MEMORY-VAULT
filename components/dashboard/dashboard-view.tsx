@@ -195,6 +195,20 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Auto-sync fresh data when user switches between Mobile and Laptop or re-focuses tab
+    const handleVisibilitySync = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchDashboardData();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibilitySync);
+    window.addEventListener("focus", handleVisibilitySync);
+
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibilitySync);
+      window.removeEventListener("focus", handleVisibilitySync);
+    };
   }, [fetchDashboardData]);
 
   // Handle global Cmd+K shortcut listener
