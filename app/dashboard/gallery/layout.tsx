@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Memory Gallery",
-  description: "Browse your complete high-resolution photo collection and visual memories in a unified gallery.",
-  alternates: {
-    canonical: "/dashboard/gallery",
-  },
+  title: "Gallery",
+  description: "Private memory gallery.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

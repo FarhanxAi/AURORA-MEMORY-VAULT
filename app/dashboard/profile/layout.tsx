@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Your Profile & Vault Export",
-  description: "Manage your user profile and download your complete portable Aurora Vault offline backup.",
-  alternates: {
-    canonical: "/dashboard/profile",
-  },
+  title: "Profile",
+  description: "Private user profile management.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

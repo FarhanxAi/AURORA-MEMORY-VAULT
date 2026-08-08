@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Timeline",
-  description: "Explore your life moments and journal reflections in chronological timeline order.",
-  alternates: {
-    canonical: "/dashboard/timeline",
-  },
+  description: "Private timeline memory view.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

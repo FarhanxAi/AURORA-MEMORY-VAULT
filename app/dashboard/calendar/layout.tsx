@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Calendar View",
-  description: "Relive memories and daily journals organized by date across days, months, and years.",
-  alternates: {
-    canonical: "/dashboard/calendar",
-  },
+  title: "Calendar",
+  description: "Private calendar memory view.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

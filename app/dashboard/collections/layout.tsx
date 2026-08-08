@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Collections",
-  description: "Organize your favorite photos, moments, and personal reflections into curated custom collections.",
-  alternates: {
-    canonical: "/dashboard/collections",
-  },
+  description: "Private memory collections.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Memory Map",
-  description: "View and explore your memories and reflections plotted geographically across an interactive global map.",
-  alternates: {
-    canonical: "/dashboard/map",
-  },
+  title: "Map",
+  description: "Private geo-location memory view.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

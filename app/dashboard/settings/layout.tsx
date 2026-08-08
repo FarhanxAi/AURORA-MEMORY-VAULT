@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Settings",
-  description: "Configure your Aurora Memory Vault preferences, privacy, dark mode, and security controls.",
-  alternates: {
-    canonical: "/dashboard/settings",
-  },
+  description: "Private vault security and account settings.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

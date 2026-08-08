@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Dashboard",
-  description: "Overview of your preserved memories, reflections, storage usage, and recent activity in Aurora Memory Vault.",
-  alternates: {
-    canonical: "/dashboard",
-  },
+  description: "Private Aurora Memory Vault dashboard.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

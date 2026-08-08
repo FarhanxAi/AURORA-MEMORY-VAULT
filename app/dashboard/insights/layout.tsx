@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Intelligence & Analytics",
-  description: "Discover memory journey patterns, life milestones, yearly aggregates, and storage analytics.",
-  alternates: {
-    canonical: "/dashboard/insights",
-  },
+  title: "Insights",
+  description: "Private memory analytics and reflections.",
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

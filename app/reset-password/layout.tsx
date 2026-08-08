@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Set New Password",
+  title: "Set New Password – Aurora Memory Vault",
   description: "Set a new secure password for your Aurora Memory Vault account.",
   alternates: {
     canonical: "/reset-password",
   },
   robots: {
     index: false,
-    follow: true,
+    follow: false,
+    nocache: true,
   },
 };
 
