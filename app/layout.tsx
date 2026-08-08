@@ -93,14 +93,7 @@ export const metadata: Metadata = {
     creator: "@FarhanxAi",
   },
   verification: {
-    google: [
-      "g41AagDU6YtDoVjKu9Ww9Zp_0yOxxIcL6dPIQSzuIyY",
-      "FRaDYi7wjfqeoniE7A0Z-rwyWa2Wfa5aZF1mrUOl9RM",
-      "google506961f12d2a7ce7",
-      "506961f12d2a7ce7",
-      "wrkUu0SPG778Wgjrq6DJQ7IS8o0rqzb446IvTiPftLY",
-      "googled7b86416dff8c351",
-    ],
+    google: "g41AagDU6YtDoVjKu9Ww9Zp_0yOxxIcL6dPIQSzuIyY",
     other: {
       "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION || "bing-site-verification-code",
     },
@@ -182,11 +175,6 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable} ${outfit.variable}`}>
       <head>
         <meta name="google-site-verification" content="g41AagDU6YtDoVjKu9Ww9Zp_0yOxxIcL6dPIQSzuIyY" />
-        <meta name="google-site-verification" content="FRaDYi7wjfqeoniE7A0Z-rwyWa2Wfa5aZF1mrUOl9RM" />
-        <meta name="google-site-verification" content="google506961f12d2a7ce7" />
-        <meta name="google-site-verification" content="506961f12d2a7ce7" />
-        <meta name="google-site-verification" content="wrkUu0SPG778Wgjrq6DJQ7IS8o0rqzb446IvTiPftLY" />
-        <meta name="google-site-verification" content="googled7b86416dff8c351" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
