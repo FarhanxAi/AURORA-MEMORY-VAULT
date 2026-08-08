@@ -96,22 +96,43 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
   const fetchDashboardData = useCallback(async () => {
     try {
       const supabase = createClient();
+      let authUser: any = null;
 
-      // Authenticate user directly from Supabase session
-      let {
-        data: { user: authUser },
-        error: authErr,
-      } = await supabase.auth.getUser();
+      // 1. Check for OAuth authorization code in URL if session is pending
+      if (typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        const codeParam = urlParams.get("code");
+        if (codeParam) {
+          try {
+            const { data: exchangeData } = await supabase.auth.exchangeCodeForSession(codeParam);
+            if (exchangeData?.user) {
+              authUser = exchangeData.user;
+            }
+          } catch (e) {
+            console.warn("OAuth code exchange notice:", e);
+          }
+          // Clean temporary authorization code from browser address bar
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
 
-      if (authErr || !authUser) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        authUser = sessionData?.session?.user || null;
+      // 2. Authenticate user directly from Supabase session
+      if (!authUser) {
+        const { data: userRes, error: userErr } = await supabase.auth.getUser();
+        if (userRes?.user) {
+          authUser = userRes.user;
+        } else {
+          const { data: sessionData } = await supabase.auth.getSession();
+          authUser = sessionData?.session?.user || null;
+        }
       }
 
       if (!authUser) {
         router.push("/login");
         return;
       }
+
+      console.log(`[AURORA CANONICAL AUTH] User ID: ${authUser.id} | Email: ${authUser.email}`);
 
       // Fast unblock from local cache for instant smooth mobile UI rendering
       const cachedProfile = vaultStore.getProfile(authUser.id);
