@@ -93,7 +93,7 @@ export const metadata: Metadata = {
     creator: "@FarhanxAi",
   },
   verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || "google-site-verification-code",
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || "wrkUu0SPG778Wgjrq6DJQ7IS8o0rqzb446IvTiPftLY",
     other: {
       "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION || "bing-site-verification-code",
     },
@@ -174,6 +174,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${outfit.variable}`}>
       <head>
+        <meta name="google-site-verification" content="wrkUu0SPG778Wgjrq6DJQ7IS8o0rqzb446IvTiPftLY" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
