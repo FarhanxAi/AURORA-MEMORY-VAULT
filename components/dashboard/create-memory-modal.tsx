@@ -378,17 +378,18 @@ export function CreateMemoryModal({
 
     try {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      let authUser = (await supabase.auth.getUser()).data.user;
+      if (!authUser) {
+        authUser = (await supabase.auth.getSession()).data.session?.user || null;
+      }
 
-      if (!user?.id) {
+      if (!authUser?.id) {
         error("Authentication Required", "Please sign in to save memories to your vault.");
         setIsUploading(false);
         return;
       }
 
-      const userId = user.id;
+      const userId = authUser.id;
       let coverImageUrl: string | null = null;
       const uploadedGalleryUrls: string[] = [];
 
@@ -408,7 +409,7 @@ export function CreateMemoryModal({
           const filePath = `${userId}/${Date.now()}_${i}_${uniqueId}.${fileExt}`;
 
           try {
-            const { data: uploadData, error: uploadErr } = await supabase.storage
+            let uploadRes = await supabase.storage
               .from(MEMORY_IMAGE_BUCKET)
               .upload(filePath, item.file, {
                 cacheControl: "3600",
@@ -416,27 +417,24 @@ export function CreateMemoryModal({
                 contentType: item.file.type || "image/jpeg",
               });
 
-            if (uploadErr) {
-              // Try creating bucket or retry once if 404
-              if (uploadErr.message?.toLowerCase().includes("not found")) {
-                await supabase.storage.createBucket(MEMORY_IMAGE_BUCKET, {
-                  public: true,
-                  allowedMimeTypes: ["image/*"],
+            if (uploadRes.error) {
+              // Try secondary bucket 'memories' if primary bucket had an issue
+              uploadRes = await supabase.storage
+                .from("memories")
+                .upload(filePath, item.file, {
+                  cacheControl: "3600",
+                  upsert: true,
+                  contentType: item.file.type || "image/jpeg",
                 });
-                const retry = await supabase.storage
-                  .from(MEMORY_IMAGE_BUCKET)
-                  .upload(filePath, item.file, { upsert: true });
-                if (retry.data?.path) {
-                  uploadedPaths.push(retry.data.path);
-                  continue;
-                }
-              }
-              console.error(`[STORAGE UPLOAD ERROR] Image ${i + 1} failed:`, uploadErr);
-              throw new Error(`Failed to upload image ${i + 1}: ${uploadErr.message}`);
             }
 
-            if (uploadData?.path) {
-              uploadedPaths.push(uploadData.path);
+            if (uploadRes.error) {
+              console.error(`[STORAGE UPLOAD ERROR] Image ${i + 1} failed:`, uploadRes.error);
+              throw new Error(`Failed to upload image ${i + 1}: ${uploadRes.error.message}`);
+            }
+
+            if (uploadRes.data?.path) {
+              uploadedPaths.push(uploadRes.data.path);
             } else {
               uploadedPaths.push(filePath);
             }

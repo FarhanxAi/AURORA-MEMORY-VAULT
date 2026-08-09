@@ -374,12 +374,18 @@ export function UserProfileView({
       const supabase = createClient();
 
       // Re-verify active session before writing
-      const { data: authCheck } = await supabase.auth.getUser();
-      const authUserId = authCheck?.user?.id;
-      if (!authUserId || authUserId !== user.id) {
+      let authUser = (await supabase.auth.getUser()).data.user;
+      if (!authUser) {
+        authUser = (await supabase.auth.getSession()).data.session?.user || null;
+      }
+
+      if (!authUser) {
         error("Session Error", "Your session has expired. Please sign in again.");
         return;
       }
+
+      const authUserId = authUser.id;
+      const authEmail = authUser.email || user.email || "";
 
       const newAvatarUrl = await uploadAvatarToStorage(supabase, authUserId, blob);
 
@@ -388,8 +394,8 @@ export function UserProfileView({
         .from("profiles")
         .upsert({
           id: authUserId,
-          email: user.email,
-          full_name: fullName || user.full_name,
+          email: authEmail,
+          full_name: fullName || user.full_name || "Vault Explorer",
           avatar_url: newAvatarUrl,
           updated_at: new Date().toISOString(),
         });
@@ -402,7 +408,14 @@ export function UserProfileView({
 
       // Cloud write confirmed — now update local state
       setAvatarUrl(newAvatarUrl);
-      const updatedProfileWithAvatar = { ...user, avatar_url: newAvatarUrl };
+      const updatedProfileWithAvatar: UserProfile = {
+        ...user,
+        id: authUserId,
+        email: authEmail,
+        avatar_url: newAvatarUrl,
+        full_name: fullName || user.full_name || "Vault Explorer",
+        updated_at: new Date().toISOString(),
+      };
       vaultStore.saveProfile(authUserId, updatedProfileWithAvatar);
       onProfileUpdated(updatedProfileWithAvatar);
       setIsCropModalOpen(false);
@@ -465,29 +478,33 @@ export function UserProfileView({
   // Profile Save Handler
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
 
     setIsSaving(true);
     try {
       const supabase = createClient();
 
       // Always re-verify the active authenticated user before writing
-      const { data: authRes } = await supabase.auth.getUser();
-      const authUserId = authRes?.user?.id;
-      if (!authUserId || authUserId !== user.id) {
+      let authUser = (await supabase.auth.getUser()).data.user;
+      if (!authUser) {
+        authUser = (await supabase.auth.getSession()).data.session?.user || null;
+      }
+
+      if (!authUser) {
         error("Session Error", "Your session has expired. Please sign in again.");
         return;
       }
 
+      const authUserId = authUser.id;
+      const authEmail = authUser.email || user?.email || "";
       const updatedIso = new Date().toISOString();
 
       const { error: upsertErr } = await supabase
         .from("profiles")
         .upsert({
           id: authUserId,
-          email: user.email,
-          full_name: fullName,
-          bio,
+          email: authEmail,
+          full_name: fullName || user?.full_name || "Vault Explorer",
+          bio: bio || "",
           avatar_url: avatarUrl,
           updated_at: updatedIso,
         });
@@ -507,7 +524,7 @@ export function UserProfileView({
 
       const newProfile: UserProfile = confirmedProfile
         ? (confirmedProfile as UserProfile)
-        : { ...user, full_name: fullName, bio, avatar_url: avatarUrl, updated_at: updatedIso };
+        : { ...(user || {}), id: authUserId, email: authEmail, full_name: fullName, bio, avatar_url: avatarUrl, updated_at: updatedIso, created_at: user?.created_at || updatedIso, last_login: updatedIso };
 
       vaultStore.saveProfile(authUserId, newProfile);
       onProfileUpdated(newProfile);
