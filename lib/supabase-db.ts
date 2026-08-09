@@ -2,47 +2,23 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { Memory } from "./types";
 import { vaultStore } from "./persistence/vault-store";
 
-// Cached table name once discovered from schema
-let cachedMemoriesTableName: string | null = null;
+// Canonical memories table name — always 'memories', never probed dynamically.
+// Dynamic probing was unreliable: a transient RLS/timeout error could resolve
+// to a wrong table and return the wrong dataset silently.
+const MEMORIES_TABLE = "memories";
 
 /**
- * Dynamically resolves the existing production table storing memories in Supabase.
- * Probes candidates and inspects schema to ensure zero hardcoded table mismatches.
+ * Returns the canonical memories table name.
+ * Kept as a function for backward compatibility with callers.
  */
-export async function getMemoriesTableName(supabase: SupabaseClient): Promise<string | null> {
-  if (cachedMemoriesTableName) {
-    return cachedMemoriesTableName;
-  }
-
-  // Priority candidates to test for memories table
-  const candidates = ["memories", "user_memories", "aurora_memories", "vault_memories"];
-
-  for (const tableName of candidates) {
-    try {
-      const { error } = await supabase
-        .from(tableName)
-        .select("id")
-        .limit(1);
-
-      if (!error) {
-        cachedMemoriesTableName = tableName;
-        console.log(`[SUPABASE SCHEMA] Located production memories table: "${tableName}"`);
-        return tableName;
-      }
-    } catch {
-      // Continue probing candidate tables
-    }
-  }
-
-  return null;
+export async function getMemoriesTableName(_supabase?: SupabaseClient): Promise<string> {
+  return MEMORIES_TABLE;
 }
 
 /**
- * Refreshes schema cache in case schema changes or metadata becomes stale.
+ * No-op kept for backward compatibility.
  */
-export function refreshSchemaCache(): void {
-  cachedMemoriesTableName = null;
-}
+export function refreshSchemaCache(): void {}
 
 /**
  * Helper to parse bucket name and file path from any Supabase storage URL format.

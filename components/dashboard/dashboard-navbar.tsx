@@ -110,6 +110,10 @@ export function DashboardNavbar({
                 <img
                   src={user.avatar_url}
                   alt={user.full_name || "User"}
+                  onError={(e) => {
+                    // Hide broken image and let gradient fallback appear
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
                   className="w-8 h-8 rounded-full object-cover border border-aurora-cyan/50"
                 />
               ) : (

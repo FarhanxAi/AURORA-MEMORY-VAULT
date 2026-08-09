@@ -536,37 +536,29 @@ export function CreateMemoryModal({
 
   return (
     <AnimatePresence>
-      {/* Scrollable viewport — lets the modal scroll naturally on small/mobile screens */}
-      <div
-        className="fixed inset-0 z-50 overflow-y-auto overscroll-none"
-        style={{ WebkitOverflowScrolling: "touch" }}
-      >
-        {/* Backdrop: pointer-events-none so it never swallows touch events inside modal */}
+      {/* Scrollable viewport — lets the modal scroll naturally on small/mobile screens without touch trapping */}
+      <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain flex items-center justify-center p-3 sm:p-6">
+        {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/80 backdrop-blur-xl pointer-events-none"
+          onClick={onClose}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xl"
         />
 
-        {/* Centering wrapper — tapping empty space around modal closes it */}
-        <div
-          className="flex min-h-full items-center justify-center p-4 py-6"
-          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
         {/* Modal Window */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-3xl glass-panel rounded-3xl p-4 sm:p-8 border border-white/20 shadow-2xl z-10"
-          style={{ touchAction: "pan-y" }}
+          className="relative w-full max-w-3xl glass-panel rounded-3xl p-4 sm:p-8 border border-white/20 shadow-2xl z-10 max-h-[90dvh] overflow-y-auto overscroll-contain"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6 sticky top-0 bg-[#090d16]/90 backdrop-blur-md z-20 -mx-4 -mt-4 px-4 pt-4 sm:-mx-8 sm:-mt-8 sm:px-8 sm:pt-6 rounded-t-3xl">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white flex items-center gap-2">
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                 <span>Add Memory to Vault</span>
               </h2>
               <p className="text-xs text-white/60">
@@ -580,14 +572,15 @@ export function CreateMemoryModal({
                 e.stopPropagation();
                 onClose();
               }}
-              className="p-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-white/80 hover:text-white transition-colors cursor-pointer shrink-0 z-30"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-white/[0.08] hover:bg-white/[0.15] active:scale-95 border border-white/15 text-white/80 hover:text-white transition-all cursor-pointer shrink-0 z-30"
               title="Close"
+              aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <form onSubmit={handleSaveMemory} className="space-y-6">
+          <form onSubmit={handleSaveMemory} className="space-y-6 pb-2">
             {/* Hidden replace input */}
             <input
               ref={replaceInputRef}
@@ -613,7 +606,7 @@ export function CreateMemoryModal({
                     onClick={() => {
                       setMemoryType(item.type as MemoryType);
                     }}
-                    className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-2 min-h-[46px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-98 ${
                       memoryType === item.type
                         ? "bg-aurora-cyan/20 border border-aurora-cyan/50 text-white shadow-[0_0_15px_rgba(56,189,248,0.3)]"
                         : "text-white/60 hover:text-white hover:bg-white/[0.05]"
@@ -652,7 +645,7 @@ export function CreateMemoryModal({
                       setCustomCategoryInput("");
                     }
                   }}
-                  className="w-full p-3 rounded-xl bg-[#0b1020] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan cursor-pointer"
+                  className="w-full min-h-[46px] p-3 rounded-xl bg-[#0b1020] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan cursor-pointer"
                 >
                   {AURORA_CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
@@ -661,7 +654,7 @@ export function CreateMemoryModal({
                   ))}
                 </select>
 
-                {/* Custom Category Input — shown only when "Custom" is selected */}
+                {/* Custom Category Input */}
                 {category === "Custom" && (
                   <div className="mt-2">
                     <input
@@ -676,7 +669,7 @@ export function CreateMemoryModal({
                         setCustomCategoryInput(val);
                         setCustomCategory(val.trim());
                       }}
-                      className="w-full p-2.5 rounded-xl bg-white/[0.06] border border-aurora-cyan/40 text-xs text-white placeholder-white/40 focus:outline-none focus:border-aurora-cyan"
+                      className="w-full min-h-[44px] p-2.5 rounded-xl bg-white/[0.06] border border-aurora-cyan/40 text-xs text-white placeholder-white/40 focus:outline-none focus:border-aurora-cyan"
                       autoFocus
                     />
                   </div>
@@ -688,10 +681,21 @@ export function CreateMemoryModal({
             {memoryType === "photo" && (
               <div className="space-y-4 rounded-3xl bg-white/[0.02] border border-white/10 p-4 sm:p-5">
                 {/* Clear "Group Images" Option / Toggle */}
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10">
+                <div
+                  onClick={() => {
+                    const next = !isGroupImages;
+                    setIsGroupImages(next);
+                    if (!next && imageItems.length > 1) {
+                      imageItems.slice(1).forEach((item) => URL.revokeObjectURL(item.preview));
+                      setImageItems([imageItems[0]]);
+                      info("Single Image Mode", "Retained primary photo. Extra photos removed.");
+                    }
+                  }}
+                  className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 active:scale-[0.99] transition-all cursor-pointer select-none"
+                >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`p-2.5 rounded-xl border transition-colors ${
+                      className={`p-2.5 rounded-xl border transition-colors shrink-0 ${
                         isGroupImages
                           ? "bg-aurora-cyan/20 border-aurora-cyan/50 text-aurora-cyan"
                           : "bg-white/[0.05] border-white/10 text-white/50"
@@ -700,8 +704,10 @@ export function CreateMemoryModal({
                       <Images className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white">Group Images</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-white">
+                          {isGroupImages ? "Group Images" : "Single Image"}
+                        </span>
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${
                             isGroupImages
@@ -709,13 +715,13 @@ export function CreateMemoryModal({
                               : "bg-white/[0.05] border-white/10 text-white/50"
                           }`}
                         >
-                          {isGroupImages ? "ON (2 - 5 Photos Max)" : "OFF (Single Photo Default)"}
+                          {isGroupImages ? "Up to 5 images" : "1 image maximum"}
                         </span>
                       </div>
                       <p className="text-[11px] text-white/60 mt-0.5">
                         {isGroupImages
                           ? "Group multiple photos (up to 5 max) into this single memory."
-                          : "Default: Exactly 1 photo. Turn on to select 2, 3, 4, or 5 photos together."}
+                          : "Default: Exactly 1 photo. Tap to enable grouping up to 5 photos."}
                       </p>
                     </div>
                   </div>
@@ -725,21 +731,22 @@ export function CreateMemoryModal({
                     type="button"
                     role="switch"
                     aria-checked={isGroupImages}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       const next = !isGroupImages;
                       setIsGroupImages(next);
                       if (!next && imageItems.length > 1) {
                         imageItems.slice(1).forEach((item) => URL.revokeObjectURL(item.preview));
                         setImageItems([imageItems[0]]);
-                        info("Single Image Mode", "Retained the primary photo. Extra photos removed.");
+                        info("Single Image Mode", "Retained primary photo. Extra photos removed.");
                       }
                     }}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                       isGroupImages ? "bg-aurora-cyan shadow-[0_0_12px_rgba(56,189,248,0.5)]" : "bg-white/20"
                     }`}
                   >
                     <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
                         isGroupImages ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
@@ -753,7 +760,7 @@ export function CreateMemoryModal({
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer group ${
+                    className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all cursor-pointer group ${
                       isDragging
                         ? "border-aurora-cyan bg-aurora-cyan/15 scale-[1.01]"
                         : "border-white/20 hover:border-aurora-cyan/50 bg-white/[0.02]"
@@ -771,22 +778,20 @@ export function CreateMemoryModal({
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                     />
 
-                    <div className="flex flex-col items-center gap-2">
+                    <div className="flex flex-col items-center gap-2.5 pointer-events-none">
                       <Upload className="w-8 h-8 text-aurora-cyan group-hover:scale-110 transition-transform" />
-                      <p className="text-xs font-medium text-white/80">
+                      <p className="text-xs font-medium text-white/90">
                         {isGroupImages ? (
                           <>
-                            Drag & drop up to <span className="text-aurora-cyan font-bold">5 photos</span> together, or{" "}
-                            <span className="text-aurora-cyan font-bold underline">Browse</span>
+                            Tap to choose <span className="text-aurora-cyan font-bold">up to 5 photos</span> (or drag & drop)
                           </>
                         ) : (
                           <>
-                            Drag & drop <span className="text-aurora-cyan font-bold">1 photo</span> here, or{" "}
-                            <span className="text-aurora-cyan font-bold underline">Browse</span>
+                            Tap to choose <span className="text-aurora-cyan font-bold">1 photo</span> (or drag & drop)
                           </>
                         )}
                       </p>
-                      <p className="text-[10px] text-white/40">
+                      <p className="text-[10px] text-white/50">
                         JPG, JPEG, PNG, WEBP &bull; Max 10 MB total
                       </p>
                     </div>
@@ -795,13 +800,13 @@ export function CreateMemoryModal({
 
                 {/* Single Image Mode Notification when 1 image is selected */}
                 {!isGroupImages && imageItems.length === 1 && (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white/70">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white/70">
                     <span className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-400" />
-                      Single Image Loaded (1/1)
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                      Single Image Selected (1/1)
                     </span>
                     <span className="text-[11px] text-white/50">
-                      Enable &ldquo;Group Images&rdquo; above to attach up to 5 photos.
+                      Tap &ldquo;Group Images&rdquo; above to attach up to 5 photos.
                     </span>
                   </div>
                 )}
@@ -809,10 +814,10 @@ export function CreateMemoryModal({
                 {/* Group Images Capacity Counter */}
                 {isGroupImages && (
                   <div className="flex items-center justify-between text-xs px-1">
-                    <span className="text-white/60">
+                    <span className="text-white/70">
                       Attached Images: <strong className="text-white">{imageItems.length} / 5</strong>
                     </span>
-                    <span className="font-mono text-[11px] text-aurora-cyan">
+                    <span className="font-mono text-[11px] text-aurora-cyan font-bold">
                       {totalImagesSizeMb} MB / 10 MB
                     </span>
                   </div>
@@ -830,36 +835,38 @@ export function CreateMemoryModal({
                     {imageItems.map((item, idx) => (
                       <div
                         key={idx}
-                        className="relative rounded-xl overflow-hidden group bg-black/40 border border-white/15 aspect-square"
+                        className="relative rounded-2xl overflow-hidden group bg-black/50 border border-white/15 aspect-square flex flex-col justify-between"
                       >
                         <img
                           src={item.preview}
                           alt={`Upload ${idx + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover absolute inset-0"
                         />
 
                         {/* Image Index Badge */}
-                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-mono font-bold text-aurora-cyan border border-white/10">
-                          {idx === 0 ? "Cover" : `#${idx + 1}`}
-                        </span>
+                        <div className="relative z-10 p-1.5 flex items-center justify-between">
+                          <span className="px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-mono font-bold text-aurora-cyan border border-white/10 shadow-sm">
+                            {idx === 0 ? "Cover" : `#${idx + 1}`}
+                          </span>
+                        </div>
 
-                        {/* Hover Overlay Action Controls */}
-                        <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1 backdrop-blur-xs">
+                        {/* Action Bar (Always visible on mobile, hover on desktop) */}
+                        <div className="relative z-10 p-1.5 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex items-center justify-center gap-1.5 transition-opacity">
                           {isGroupImages && idx > 0 && (
                             <button
                               type="button"
                               onClick={() => moveImageItem(idx, "left")}
-                              className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+                              className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 text-white cursor-pointer active:scale-95"
                               title="Move Left"
                             >
-                              <ChevronLeft className="w-3.5 h-3.5" />
+                              <ChevronLeft className="w-4 h-4" />
                             </button>
                           )}
 
                           <button
                             type="button"
                             onClick={() => triggerReplaceImage(idx)}
-                            className="p-1.5 rounded-lg bg-aurora-cyan/30 hover:bg-aurora-cyan/50 text-aurora-cyan cursor-pointer"
+                            className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg bg-aurora-cyan/30 hover:bg-aurora-cyan/50 text-aurora-cyan cursor-pointer active:scale-95"
                             title="Replace Image"
                           >
                             <RefreshCw className="w-3.5 h-3.5" />
@@ -868,7 +875,7 @@ export function CreateMemoryModal({
                           <button
                             type="button"
                             onClick={() => removeImageItem(idx)}
-                            className="p-1.5 rounded-lg bg-rose-500/30 hover:bg-rose-500/50 text-rose-300 cursor-pointer"
+                            className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg bg-rose-500/30 hover:bg-rose-500/50 text-rose-300 cursor-pointer active:scale-95"
                             title="Remove Image"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -878,10 +885,10 @@ export function CreateMemoryModal({
                             <button
                               type="button"
                               onClick={() => moveImageItem(idx, "right")}
-                              className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+                              className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 text-white cursor-pointer active:scale-95"
                               title="Move Right"
                             >
-                              <ChevronRight className="w-3.5 h-3.5" />
+                              <ChevronRight className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -941,14 +948,15 @@ export function CreateMemoryModal({
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={handleAddTag}
-                    className="flex-1 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan"
+                    className="flex-1 min-h-[46px] p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan"
                   />
                   <button
                     type="button"
                     onClick={handleAddTag}
-                    className="p-2.5 rounded-xl bg-aurora-cyan/20 text-aurora-cyan hover:bg-aurora-cyan/30 cursor-pointer"
+                    className="min-w-[46px] min-h-[46px] flex items-center justify-center rounded-xl bg-aurora-cyan/20 text-aurora-cyan hover:bg-aurora-cyan/30 active:scale-95 cursor-pointer"
+                    aria-label="Add Tag"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-5 h-5" />
                   </button>
                 </div>
                 {tags.length > 0 && (
@@ -956,13 +964,17 @@ export function CreateMemoryModal({
                     {tags.map((t) => (
                       <span
                         key={t}
-                        className="px-2.5 py-1 rounded-lg bg-white/10 text-[11px] font-semibold text-white/90 flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-xl bg-white/10 text-xs font-semibold text-white/90 flex items-center gap-1.5"
                       >
                         #{t}
-                        <X
-                          className="w-3 h-3 text-white/50 hover:text-white cursor-pointer"
+                        <button
+                          type="button"
                           onClick={() => handleRemoveTag(t)}
-                        />
+                          className="min-w-[20px] min-h-[20px] flex items-center justify-center text-white/50 hover:text-white cursor-pointer"
+                          aria-label={`Remove tag ${t}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </span>
                     ))}
                   </div>
@@ -981,24 +993,23 @@ export function CreateMemoryModal({
               </div>
             </div>
 
-            {/* Date & Favorite */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-white/10">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="w-4 h-4 text-white/50" />
+            {/* Date, Mood & Favorite Controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-white/10">
+              <div className="flex items-center gap-2 min-h-[46px] p-2 rounded-xl bg-white/[0.04] border border-white/10">
+                <CalendarIcon className="w-4 h-4 text-white/50 shrink-0" />
                 <input
                   type="date"
                   value={memoryDate}
                   onChange={(e) => setMemoryDate(e.target.value)}
-                  className="p-2 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan cursor-pointer"
+                  className="w-full bg-transparent text-xs text-white focus:outline-none cursor-pointer"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase font-semibold text-white/70">Mood:</span>
+              <div className="min-h-[46px]">
                 <select
                   value={mood}
                   onChange={(e) => setMood(e.target.value)}
-                  className="p-2 rounded-xl bg-[#0b1020] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan cursor-pointer"
+                  className="w-full min-h-[46px] p-2.5 rounded-xl bg-[#0b1020] border border-white/10 text-xs text-white focus:outline-none focus:border-aurora-cyan cursor-pointer"
                 >
                   {AURORA_MOOD_GROUPS.map((group) => (
                     <optgroup key={group} label={`── ${group} ──`}>
@@ -1012,18 +1023,20 @@ export function CreateMemoryModal({
                 </select>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsFavorite(!isFavorite)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
-                  isFavorite
-                    ? "bg-rose-500/20 border-rose-500/50 text-rose-300"
-                    : "bg-white/[0.04] border-white/10 text-white/60 hover:text-white"
-                }`}
-              >
-                <Star className={`w-4 h-4 ${isFavorite ? "fill-rose-400 text-rose-400" : ""}`} />
-                <span>{isFavorite ? "Starred Favorite" : "Add to Favorites"}</span>
-              </button>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setIsFavorite(!isFavorite)}
+                  className={`w-full min-h-[46px] px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer border active:scale-98 ${
+                    isFavorite
+                      ? "bg-rose-500/20 border-rose-500/50 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.2)]"
+                      : "bg-white/[0.04] border-white/10 text-white/70 hover:text-white"
+                  }`}
+                >
+                  <Star className={`w-4 h-4 ${isFavorite ? "fill-rose-400 text-rose-400" : ""}`} />
+                  <span>{isFavorite ? "Starred Favorite" : "Add to Favorites"}</span>
+                </button>
+              </div>
             </div>
 
             {/* Upload Progress Status Indicator */}
@@ -1044,14 +1057,15 @@ export function CreateMemoryModal({
               </div>
             )}
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
+            {/* Actions (Sticky or accessible on mobile) */}
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-4 border-t border-white/10">
               <GlassButton
                 type="button"
                 variant="secondary"
                 size="md"
                 onClick={onClose}
                 disabled={isUploading}
+                className="w-full sm:w-auto min-h-[46px]"
               >
                 Cancel
               </GlassButton>
@@ -1062,13 +1076,13 @@ export function CreateMemoryModal({
                 size="md"
                 isLoading={isUploading}
                 leftIcon={<Check className="w-4 h-4" />}
+                className="w-full sm:w-auto min-h-[46px]"
               >
                 {isUploading ? `Uploading (${uploadProgress}%)` : "Save Memory"}
               </GlassButton>
             </div>
           </form>
         </motion.div>
-        </div>
       </div>
     </AnimatePresence>
   );

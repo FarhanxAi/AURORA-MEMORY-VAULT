@@ -103,18 +103,18 @@ export async function reconcileAndMigrateUserAccount(
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // STEP 3: RECONCILE PROFILE IN SUPABASE & LOCAL STORE
+  // STEP 3: RECONCILE PROFILE IN SUPABASE & LOCAL STORE (CLOUD SOURCE OF TRUTH)
   // ─────────────────────────────────────────────────────────────────────────────
   let profileData: UserProfile | null = null;
 
   try {
-    const { data: dbProfile } = await supabase
+    const { data: dbProfile, error: pSelectErr } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .maybeSingle();
 
-    if (dbProfile) {
+    if (!pSelectErr && dbProfile) {
       profileData = dbProfile as UserProfile;
     }
   } catch (pErr) {
@@ -124,15 +124,14 @@ export async function reconcileAndMigrateUserAccount(
   const cachedProfile = vaultStore.getProfile(userId);
   const nowStr = new Date().toISOString();
 
-  // finalProfile represents what is shown in the UI.
-  // RULE: Cloud (profileData) is ALWAYS the source of truth.
-  // If it exists, use it exactly. Local cache is ONLY a display fallback
-  // when network is unavailable — it NEVER overwrites cloud data.
+  // finalProfile represents what is rendered in the UI.
+  // RULE: Supabase Cloud (profileData) is ALWAYS the authoritative source of truth.
+  // If it exists in Supabase, use it exactly as-is. Google OAuth metadata or
+  // device local cache NEVER overwrites a custom DP, custom full_name, or bio.
   const finalProfile: UserProfile = profileData
     ? {
-        // Cloud record is canonical — use it exactly as-is
+        // Cloud record is canonical — keep every custom field (avatar_url, full_name, bio)
         ...(profileData as UserProfile),
-        // Keep last_login fresh for this session
         last_login: nowStr,
       }
     : {
@@ -156,10 +155,10 @@ export async function reconcileAndMigrateUserAccount(
       };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // PROFILE STRATEGY:
+  // PROFILE PERSISTENCE STRATEGY:
   // - If profile already exists in Supabase: ONLY update last_login + updated_at.
-  //   NEVER overwrite user's custom full_name or avatar_url.
-  // - If no profile exists yet: create a new one with Google metadata as defaults.
+  //   NEVER overwrite user's custom full_name or custom avatar_url.
+  // - If no profile exists yet: create a new one with initial defaults.
   // ─────────────────────────────────────────────────────────────────────────────
   try {
     if (profileData) {
@@ -184,7 +183,9 @@ export async function reconcileAndMigrateUserAccount(
         updated_at: nowStr,
         last_login: nowStr,
       };
-      const { error: insertErr } = await supabase.from("profiles").upsert(newProfile, { onConflict: "id", ignoreDuplicates: true });
+      const { error: insertErr } = await supabase
+        .from("profiles")
+        .upsert(newProfile, { onConflict: "id", ignoreDuplicates: true });
       if (insertErr) console.warn("[RECONCILIATION] Profile creation notice:", insertErr);
     }
   } catch (upsertErr) {

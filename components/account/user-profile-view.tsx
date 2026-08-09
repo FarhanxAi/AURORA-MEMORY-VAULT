@@ -40,90 +40,54 @@ interface UserProfileViewProps {
   onMemoriesDeleted?: () => void;
 }
 
-// Resilient helper to upload image to Supabase Storage with bucket auto-creation / fallback
+// Resilient helper to upload avatar image to Supabase Storage
 async function uploadAvatarToStorage(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   fileOrBlob: Blob | File
 ): Promise<string> {
-  const possibleBucketNames = ["avatars", "profiles", "memory-images", "memories"];
+  const possibleBucketNames = ["memory-images", "avatars", "profiles", "memories"];
   const fileExt = "webp";
   const filePath = `${userId}/avatar_${Date.now()}.${fileExt}`;
 
-  let targetBucket = "avatars";
-  try {
-    const { data: buckets } = await supabase.storage.listBuckets();
-    if (buckets && buckets.length > 0) {
-      const match = buckets.find((b) => possibleBucketNames.includes(b.name || b.id));
-      if (match) {
-        targetBucket = match.name || match.id;
-      }
-    }
-  } catch (err) {
-    console.warn("Storage list bucket check:", err);
-  }
+  let targetBucket = "memory-images";
+  let lastError: Error | null = null;
 
-  // Attempt upload to target bucket
-  let uploadRes = await supabase.storage
-    .from(targetBucket)
-    .upload(filePath, fileOrBlob, {
-      contentType: "image/webp",
-      upsert: true,
-    });
-
-  // If Bucket not found error, try to create the bucket dynamically in Supabase Storage
-  if (
-    uploadRes.error &&
-    (uploadRes.error.message?.toLowerCase().includes("not found") ||
-      (uploadRes.error as { statusCode?: string | number }).statusCode === 404 ||
-      (uploadRes.error as { statusCode?: string | number }).statusCode === "404" ||
-      (uploadRes.error as { error?: string }).error?.toLowerCase().includes("not found"))
-  ) {
+  for (const bucketName of possibleBucketNames) {
     try {
-      await supabase.storage.createBucket(targetBucket, {
-        public: true,
-        allowedMimeTypes: ["image/*"],
-      });
-      uploadRes = await supabase.storage
-        .from(targetBucket)
+      const uploadRes = await supabase.storage
+        .from(bucketName)
         .upload(filePath, fileOrBlob, {
           contentType: "image/webp",
           upsert: true,
         });
-    } catch (createBucketErr) {
-      console.warn("Create bucket notice:", createBucketErr);
-    }
-  }
 
-  // If primary bucket failed, try other bucket names
-  if (uploadRes.error) {
-    for (const altBucket of possibleBucketNames) {
-      if (altBucket === targetBucket) continue;
-      const altRes = await supabase.storage
-        .from(altBucket)
-        .upload(filePath, fileOrBlob, {
-          contentType: "image/webp",
-          upsert: true,
-        });
-      if (!altRes.error) {
-        targetBucket = altBucket;
-        uploadRes = altRes;
-        break;
+      if (!uploadRes.error) {
+        targetBucket = bucketName;
+        const { data: publicUrlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+        if (publicUrlData?.publicUrl) {
+          console.log(`[AVATAR UPLOAD SUCCESS] Uploaded to bucket "${bucketName}" at path "${filePath}"`);
+          return publicUrlData.publicUrl;
+        }
+      } else {
+        lastError = new Error(uploadRes.error.message);
+        console.warn(`[AVATAR UPLOAD NOTICE] Bucket "${bucketName}" attempt:`, uploadRes.error.message);
       }
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[AVATAR UPLOAD NOTICE] Bucket "${bucketName}" exception:`, err);
     }
   }
 
-  if (!uploadRes.error) {
-    const { data: publicUrlData } = supabase.storage
-      .from(targetBucket)
-      .getPublicUrl(filePath);
-
-    if (publicUrlData?.publicUrl) {
-      return publicUrlData.publicUrl;
-    }
+  // If standard buckets failed, throw error or fallback safely
+  if (lastError) {
+    console.error("[AVATAR STORAGE FAILED]", lastError);
   }
 
-  // Fail-safe fallback: convert blob to Base64 data URL so avatar image upload ALWAYS succeeds smoothly
+  // Fail-safe fallback: convert blob to Base64 data URL if storage upload failed
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onloadend = () => {

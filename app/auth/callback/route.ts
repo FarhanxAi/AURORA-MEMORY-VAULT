@@ -49,43 +49,41 @@ export async function GET(request: NextRequest) {
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && sessionData?.user) {
-      // Background profile initialization (preserves user's custom name and DP across all devices)
-      (async () => {
-        try {
-          const { data: existingProfile } = await supabase
-            .from("profiles")
-            .select("id, full_name, avatar_url")
-            .eq("id", sessionData.user.id)
-            .maybeSingle();
+      // Profile initialization (strictly preserves user's custom name and DP across all devices)
+      try {
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .eq("id", sessionData.user.id)
+          .maybeSingle();
 
-          if (existingProfile) {
-            // Preserve user's custom profile across all devices, updating only email and last_login
-            await supabase
-              .from("profiles")
-              .update({
-                email: sessionData.user.email || undefined,
-                last_login: new Date().toISOString(),
-              })
-              .eq("id", sessionData.user.id);
-          } else {
-            // First time profile creation for brand new user
-            await supabase.from("profiles").insert({
-              id: sessionData.user.id,
-              email: sessionData.user.email || "",
-              full_name:
-                sessionData.user.user_metadata?.full_name ||
-                sessionData.user.user_metadata?.name ||
-                "Vault Explorer",
-              avatar_url: sessionData.user.user_metadata?.avatar_url || "",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+        if (existingProfile) {
+          // Preserve user's custom profile across all devices, updating only email and last_login
+          await supabase
+            .from("profiles")
+            .update({
+              email: sessionData.user.email || undefined,
               last_login: new Date().toISOString(),
-            });
-          }
-        } catch (e) {
-          console.error("Profile synchronization error during OAuth callback:", e);
+            })
+            .eq("id", sessionData.user.id);
+        } else {
+          // First time profile creation for brand new user
+          await supabase.from("profiles").insert({
+            id: sessionData.user.id,
+            email: sessionData.user.email || "",
+            full_name:
+              sessionData.user.user_metadata?.full_name ||
+              sessionData.user.user_metadata?.name ||
+              "Vault Explorer",
+            avatar_url: sessionData.user.user_metadata?.avatar_url || "",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_login: new Date().toISOString(),
+          });
         }
-      })();
+      } catch (e) {
+        console.error("Profile synchronization error during OAuth callback:", e);
+      }
 
       return redirectResponse;
     } else {

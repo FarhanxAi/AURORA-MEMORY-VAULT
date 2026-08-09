@@ -134,7 +134,14 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
 
       console.log(`[AURORA CANONICAL AUTH] User ID: ${authUser.id} | Email: ${authUser.email}`);
 
-      // Fast unblock from local cache for instant smooth mobile UI rendering
+      // CRITICAL: Purge any cached data from other users/sessions on this device.
+      // This prevents stale phone/laptop data from a previous account bleeding into
+      // the current authenticated user's view.
+      vaultStore.purgeOtherUserCaches(authUser.id);
+
+      // Fast unblock: show cached data for THIS user only (instant UI render).
+      // This cache is always overwritten by cloud data below — it is a display
+      // optimisation ONLY and never persists as authoritative state.
       const cachedProfile = vaultStore.getProfile(authUser.id);
       const cachedMemories = vaultStore.getMemories(authUser.id);
 

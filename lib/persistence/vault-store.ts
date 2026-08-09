@@ -129,6 +129,37 @@ class VaultPersistenceEngine {
     }
   }
 
+  /**
+   * Wipes ALL aurora_* keys that belong to a DIFFERENT user.
+   * Called on login so stale data from a previous session (or a
+   * different account on the same device) can never leak into the UI.
+   */
+  purgeOtherUserCaches(currentUserId: string): void {
+    if (!this.isClient || !currentUserId) return;
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        // Only touch aurora-namespaced keys
+        if (!key.startsWith('aurora_')) continue;
+        // Keep keys belonging to the current user
+        if (key.includes(`_${currentUserId}`)) continue;
+        // Keep non-user-specific global keys (rare, listed explicitly)
+        // Everything else is another user's data — mark for removal
+        keysToRemove.push(key);
+      }
+      for (const key of keysToRemove) {
+        localStorage.removeItem(key);
+      }
+      if (keysToRemove.length > 0) {
+        console.log(`[VAULT PURGE] Removed ${keysToRemove.length} stale keys from other sessions:`, keysToRemove);
+      }
+    } catch (err) {
+      console.warn('VaultStore purgeOtherUserCaches notice:', err);
+    }
+  }
+
   deleteUserVault(userId: string): void {
     if (!this.isClient || !userId) return;
     try {
