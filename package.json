@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "opennextjs-cloudflare build",
-    "build:next": "next build",
+    "build": "next build",
+    "build:worker": "opennextjs-cloudflare build",
+    "build:cloudflare": "opennextjs-cloudflare build",
     "start": "next start",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "build:cloudflare": "opennextjs-cloudflare build",
     "preview:cloudflare": "opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare deploy",
     "deploy:cloudflare": "opennextjs-cloudflare deploy"
   },
   "dependencies": {
