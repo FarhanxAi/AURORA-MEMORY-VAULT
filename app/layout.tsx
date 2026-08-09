@@ -16,7 +16,7 @@ const outfit = Outfit({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://aurora-memory-vault.netlify.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://aurora-memory-vault.pages.dev";
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_ID || process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const gtmId = process.env.NEXT_PUBLIC_GTM_ID;
 

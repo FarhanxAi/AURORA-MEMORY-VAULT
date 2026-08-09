@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
  * AURORA IDENTITY DIAGNOSTIC PAGE
  *
  * Open this page on BOTH phone and laptop after Google login:
- * https://aurora-memory-vault.netlify.app/debug-identity
+ * https://aurora-memory-vault.pages.dev/debug-identity
  *
  * Compare the output. If user.id differs → Supabase auth identity is split.
  * If user.id is same but memories differ → data ownership bug.

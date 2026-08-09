@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const errorDescription = searchParams.get("error_description");
   const errorCode = searchParams.get("error_code");
 
-  // Determine dynamic origin based on request headers (Netlify & local friendly)
+  // Determine dynamic origin based on request headers (Cloudflare & edge friendly)
   const forwardedHost = request.headers.get("x-forwarded-host");
   const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
   const baseOrigin = forwardedHost

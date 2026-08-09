@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://aurora-memory-vault.netlify.app";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://aurora-memory-vault.pages.dev";
   const now = new Date();
 
   return [
