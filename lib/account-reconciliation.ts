@@ -39,7 +39,7 @@ export async function reconcileAndMigrateUserAccount(
   const cloudMap = new Map<string, Memory>();
 
   try {
-    // 1a. Query memories strictly owned by canonical auth.users.id
+    // Query memories strictly owned by canonical auth.users.id
     const { data: directMemories, error: directErr } = await supabase
       .from("memories")
       .select("*")
@@ -50,34 +50,6 @@ export async function reconcileAndMigrateUserAccount(
       for (const m of directMemories) {
         if (m && m.id) {
           cloudMap.set(m.id, m as Memory);
-        }
-      }
-    }
-
-    // 1b. Check for legacy cloud records stored under email rather than UUID
-    if (userEmail) {
-      const { data: emailMemories, error: emailErr } = await supabase
-        .from("memories")
-        .select("*")
-        .eq("user_id", userEmail);
-
-      if (!emailErr && Array.isArray(emailMemories) && emailMemories.length > 0) {
-        const legacyIdsToMigrate: string[] = [];
-        for (const em of emailMemories) {
-          if (em && em.id && !cloudMap.has(em.id)) {
-            legacyIdsToMigrate.push(em.id);
-            const migrated = { ...em, user_id: userId } as Memory;
-            cloudMap.set(em.id, migrated);
-            migratedLegacyCloudCount++;
-          }
-        }
-
-        // Migrate ownership to canonical authUser.id in Supabase cloud
-        if (legacyIdsToMigrate.length > 0) {
-          await supabase
-            .from("memories")
-            .update({ user_id: userId, updated_at: new Date().toISOString() })
-            .in("id", legacyIdsToMigrate);
         }
       }
     }

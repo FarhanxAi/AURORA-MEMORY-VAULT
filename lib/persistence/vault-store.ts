@@ -1,11 +1,19 @@
 import { UserProfile, Memory, Collection } from "@/lib/types";
 
 class VaultPersistenceEngine {
-  private isClient = typeof window !== "undefined";
+  private getStorage(): Storage | null {
+    if (typeof window === "undefined") return null;
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  }
 
   // --- PROFILE PERSISTENCE ---
   saveProfile(userId: string, profile: UserProfile): void {
-    if (!this.isClient || !userId) return;
+    const storage = this.getStorage();
+    if (!storage || !userId) return;
     try {
       const key = `aurora_profile_${userId}`;
       const existing = this.getProfile(userId);
@@ -19,25 +27,26 @@ class VaultPersistenceEngine {
 
       // Set member since key in localStorage ONCE ONLY (Namespaced per user)
       const memberSinceKey = `aurora_member_since_${userId}`;
-      if (!localStorage.getItem(memberSinceKey)) {
-        localStorage.setItem(memberSinceKey, permanentCreatedAt);
+      if (!storage.getItem(memberSinceKey)) {
+        storage.setItem(memberSinceKey, permanentCreatedAt);
       }
 
       // Record latest login timestamp (Namespaced per user)
       const lastLoginKey = `aurora_last_login_${userId}`;
-      localStorage.setItem(lastLoginKey, new Date().toISOString());
+      storage.setItem(lastLoginKey, new Date().toISOString());
 
-      localStorage.setItem(key, JSON.stringify(updatedProfile));
+      storage.setItem(key, JSON.stringify(updatedProfile));
     } catch (err) {
       console.warn("VaultStore saveProfile notice:", err);
     }
   }
 
   getProfile(userId: string): UserProfile | null {
-    if (!this.isClient || !userId) return null;
+    const storage = this.getStorage();
+    if (!storage || !userId) return null;
     try {
       const key = `aurora_profile_${userId}`;
-      const raw = localStorage.getItem(key);
+      const raw = storage.getItem(key);
       if (raw) {
         return JSON.parse(raw) as UserProfile;
       }
@@ -48,11 +57,12 @@ class VaultPersistenceEngine {
   }
 
   deleteProfile(userId: string): void {
-    if (!this.isClient || !userId) return;
+    const storage = this.getStorage();
+    if (!storage || !userId) return;
     try {
-      localStorage.removeItem(`aurora_profile_${userId}`);
-      localStorage.removeItem(`aurora_member_since_${userId}`);
-      localStorage.removeItem(`aurora_last_login_${userId}`);
+      storage.removeItem(`aurora_profile_${userId}`);
+      storage.removeItem(`aurora_member_since_${userId}`);
+      storage.removeItem(`aurora_last_login_${userId}`);
     } catch (err) {
       console.warn("VaultStore deleteProfile notice:", err);
     }
@@ -60,26 +70,30 @@ class VaultPersistenceEngine {
 
   // --- MEMORIES PERSISTENCE ---
   saveMemories(userId: string, memories: Memory[]): void {
-    if (!this.isClient || !userId) return;
+    const storage = this.getStorage();
+    if (!storage || !userId) return;
     try {
       // STRICT USER ISOLATION: Filter memories to verify they belong exclusively to this userId
-      const userMemories = memories.filter((m) => !m.user_id || m.user_id === userId);
+      const userMemories = (memories || []).filter((m) => m && (!m.user_id || m.user_id === userId));
       const key = `aurora_memories_${userId}`;
-      localStorage.setItem(key, JSON.stringify(userMemories));
+      storage.setItem(key, JSON.stringify(userMemories));
     } catch (err) {
       console.warn("VaultStore saveMemories notice:", err);
     }
   }
 
   getMemories(userId: string): Memory[] {
-    if (!this.isClient || !userId) return [];
+    const storage = this.getStorage();
+    if (!storage || !userId) return [];
     try {
       const key = `aurora_memories_${userId}`;
-      const raw = localStorage.getItem(key);
+      const raw = storage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw) as Memory[];
-        // Filter strictly to userId to prevent cross-account leaks
-        return parsed.filter((m) => !m.user_id || m.user_id === userId);
+        if (Array.isArray(parsed)) {
+          // Filter strictly to userId to prevent cross-account leaks
+          return parsed.filter((m) => m && (!m.user_id || m.user_id === userId));
+        }
       }
     } catch (err) {
       console.warn("VaultStore getMemories notice:", err);
@@ -88,7 +102,8 @@ class VaultPersistenceEngine {
   }
 
   saveMemoryItem(userId: string, memory: Memory): void {
-    if (!this.isClient || !userId) return;
+    const storage = this.getStorage();
+    if (!storage || !userId || !memory) return;
     try {
       const existing = this.getMemories(userId);
       const index = existing.findIndex((m) => m.id === memory.id);
@@ -104,7 +119,8 @@ class VaultPersistenceEngine {
   }
 
   deleteMemoryItem(userId: string, memoryId: string): void {
-    if (!this.isClient || !userId) return;
+    const storage = this.getStorage();
+    if (!storage || !userId || !memoryId) return;
     try {
       const existing = this.getMemories(userId);
       const filtered = existing.filter((m) => m.id !== memoryId);
@@ -116,14 +132,18 @@ class VaultPersistenceEngine {
 
   // --- LOGOUT / ACCOUNT SWITCH CLEANUP ---
   clearSessionCachesOnLogout(): void {
-    if (!this.isClient) return;
+    const storage = this.getStorage();
     try {
-      sessionStorage.clear();
-      // Purge any legacy un-namespaced global keys to ensure complete isolation
-      localStorage.removeItem("aurora_tags");
-      localStorage.removeItem("aurora_locations");
-      localStorage.removeItem("aurora_recent_activity");
-      localStorage.removeItem("aurora_search_history");
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        window.sessionStorage.clear();
+      }
+      if (storage) {
+        // Purge any legacy un-namespaced global keys to ensure complete isolation
+        storage.removeItem("aurora_tags");
+        storage.removeItem("aurora_locations");
+        storage.removeItem("aurora_recent_activity");
+        storage.removeItem("aurora_search_history");
+      }
     } catch (err) {
       console.warn("VaultStore clearSessionCachesOnLogout notice:", err);
     }
@@ -135,41 +155,40 @@ class VaultPersistenceEngine {
    * different account on the same device) can never leak into the UI.
    */
   purgeOtherUserCaches(currentUserId: string): void {
-    if (!this.isClient || !currentUserId) return;
+    const storage = this.getStorage();
+    if (!storage || !currentUserId) return;
     try {
       const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      const len = storage.length;
+      for (let i = 0; i < len; i++) {
+        const key = storage.key(i);
         if (!key) continue;
         // Only touch aurora-namespaced keys
-        if (!key.startsWith('aurora_')) continue;
+        if (!key.startsWith("aurora_")) continue;
         // Keep keys belonging to the current user
         if (key.includes(`_${currentUserId}`)) continue;
-        // Keep non-user-specific global keys (rare, listed explicitly)
         // Everything else is another user's data — mark for removal
         keysToRemove.push(key);
       }
       for (const key of keysToRemove) {
-        localStorage.removeItem(key);
-      }
-      if (keysToRemove.length > 0) {
-        console.log(`[VAULT PURGE] Removed ${keysToRemove.length} stale keys from other sessions:`, keysToRemove);
+        storage.removeItem(key);
       }
     } catch (err) {
-      console.warn('VaultStore purgeOtherUserCaches notice:', err);
+      console.warn("VaultStore purgeOtherUserCaches notice:", err);
     }
   }
 
   deleteUserVault(userId: string): void {
-    if (!this.isClient || !userId) return;
+    const storage = this.getStorage();
+    if (!storage || !userId) return;
     try {
-      localStorage.removeItem(`aurora_profile_${userId}`);
-      localStorage.removeItem(`aurora_memories_${userId}`);
-      localStorage.removeItem(`aurora_collections_${userId}`);
-      localStorage.removeItem(`aurora_tags_${userId}`);
-      localStorage.removeItem(`aurora_locations_${userId}`);
-      localStorage.removeItem(`aurora_member_since_${userId}`);
-      localStorage.removeItem(`aurora_last_login_${userId}`);
+      storage.removeItem(`aurora_profile_${userId}`);
+      storage.removeItem(`aurora_memories_${userId}`);
+      storage.removeItem(`aurora_collections_${userId}`);
+      storage.removeItem(`aurora_tags_${userId}`);
+      storage.removeItem(`aurora_locations_${userId}`);
+      storage.removeItem(`aurora_member_since_${userId}`);
+      storage.removeItem(`aurora_last_login_${userId}`);
     } catch (err) {
       console.warn("VaultStore deleteUserVault notice:", err);
     }

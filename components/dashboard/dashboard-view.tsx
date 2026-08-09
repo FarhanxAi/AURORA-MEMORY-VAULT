@@ -17,7 +17,6 @@ import { WelcomeHeader } from "@/components/dashboard/welcome-header";
 import { StatsGrid, DashboardFilterKey } from "@/components/dashboard/stats-grid";
 import { UnifiedTimelineGallery } from "@/components/dashboard/unified-timeline-gallery";
 
-import dynamic from "next/dynamic";
 import { UserProfile, Memory, MemoryType, Collection, NotificationItem } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/toast-context";
@@ -25,15 +24,14 @@ import { vaultStore } from "@/lib/persistence/vault-store";
 import { recoverMemoryImage, purgeAndVerifyMemoryStorageFiles } from "@/lib/image-utils";
 import { reconcileAndMigrateUserAccount } from "@/lib/account-reconciliation";
 
-// Dynamic Code-Splitting & Lazy Loading for Heavy Components & Modals
-const SmartSearchModal = dynamic(() => import("@/components/intelligence/smart-search-modal").then((m) => m.SmartSearchModal), { ssr: false });
-const CreateMemoryModal = dynamic(() => import("@/components/dashboard/create-memory-modal").then((m) => m.CreateMemoryModal), { ssr: false });
-const EditMemoryModal = dynamic(() => import("@/components/experience/edit-memory-modal").then((m) => m.EditMemoryModal), { ssr: false });
-const CinematicMemoryViewer = dynamic(() => import("@/components/experience/cinematic-memory-viewer").then((m) => m.CinematicMemoryViewer), { ssr: false });
-const TrashArchiveView = dynamic(() => import("@/components/experience/trash-archive-view").then((m) => m.TrashArchiveView), { ssr: false });
-const InsightsDashboard = dynamic(() => import("@/components/intelligence/insights-dashboard").then((m) => m.InsightsDashboard), { ssr: false });
-const UserProfileView = dynamic(() => import("@/components/account/user-profile-view").then((m) => m.UserProfileView), { ssr: false });
-const AccountManagementView = dynamic(() => import("@/components/account/account-management-view").then((m) => m.AccountManagementView), { ssr: false });
+import { SmartSearchModal } from "@/components/intelligence/smart-search-modal";
+import { CreateMemoryModal } from "@/components/dashboard/create-memory-modal";
+import { EditMemoryModal } from "@/components/experience/edit-memory-modal";
+import { CinematicMemoryViewer } from "@/components/experience/cinematic-memory-viewer";
+import { TrashArchiveView } from "@/components/experience/trash-archive-view";
+import { InsightsDashboard } from "@/components/intelligence/insights-dashboard";
+import { UserProfileView } from "@/components/account/user-profile-view";
+import { AccountManagementView } from "@/components/account/account-management-view";
 
 export type ExperienceTab =
   | "insights"
@@ -93,7 +91,13 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
     []
   );
 
+  const isFetchingRef = React.useRef(false);
+  const currentUserIdRef = React.useRef<string | null>(null);
+
   const fetchDashboardData = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     try {
       const supabase = createClient();
       let authUser: any = null;
@@ -118,7 +122,7 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
 
       // 2. Authenticate user directly from Supabase session
       if (!authUser) {
-        const { data: userRes, error: userErr } = await supabase.auth.getUser();
+        const { data: userRes } = await supabase.auth.getUser();
         if (userRes?.user) {
           authUser = userRes.user;
         } else {
@@ -127,21 +131,18 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
         }
       }
 
-      if (!authUser) {
+      if (!authUser?.id) {
         router.push("/login");
         return;
       }
 
+      currentUserIdRef.current = authUser.id;
       console.log(`[AURORA CANONICAL AUTH] User ID: ${authUser.id} | Email: ${authUser.email}`);
 
-      // CRITICAL: Purge any cached data from other users/sessions on this device.
-      // This prevents stale phone/laptop data from a previous account bleeding into
-      // the current authenticated user's view.
+      // Purge any cached data from other users/sessions on this device
       vaultStore.purgeOtherUserCaches(authUser.id);
 
-      // Fast unblock: show cached data for THIS user only (instant UI render).
-      // This cache is always overwritten by cloud data below — it is a display
-      // optimisation ONLY and never persists as authoritative state.
+      // Fast unblock: show cached data for THIS user only (instant UI render)
       const cachedProfile = vaultStore.getProfile(authUser.id);
       const cachedMemories = vaultStore.getMemories(authUser.id);
 
@@ -152,7 +153,6 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
       }
 
       // EXECUTE CANONICAL RECONCILIATION & CROSS-DEVICE DATA MERGE
-      // Merges Laptop memories + Mobile memories + Supabase Cloud into ONE canonical dataset
       const { unifiedMemories, unifiedProfile } = await reconcileAndMigrateUserAccount(supabase, authUser);
 
       setUser(unifiedProfile);
@@ -163,15 +163,17 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
         .select("*")
         .eq("user_id", authUser.id);
 
-      if (colData) setCollections((colData as Collection[]) || []);
+      if (colData && Array.isArray(colData)) {
+        setCollections((colData as Collection[]) || []);
+      }
 
-      let finalMemories = unifiedMemories;
+      let finalMemories = Array.isArray(unifiedMemories) ? unifiedMemories : [];
 
       // Auto Purge items in Trash older than 30 days
       const thirtyDaysAgoMs = 30 * 24 * 60 * 60 * 1000;
       const nowMs = new Date().getTime();
       const expiredMemories = finalMemories.filter((m) => {
-        if (!m.deleted || !m.deleted_at) return false;
+        if (!m || !m.deleted || !m.deleted_at) return false;
         return nowMs - new Date(m.deleted_at).getTime() > thirtyDaysAgoMs;
       });
 
@@ -189,8 +191,7 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
       setMemories(finalMemories);
       vaultStore.saveMemories(authUser.id, finalMemories);
 
-      // PART 1: Run Automatic Image Recovery ONLY for memories with genuinely stale
-      // HTTPS signed URLs (those containing a token= param).
+      // PART 1: Run Automatic Image Recovery ONLY for memories with genuinely stale signed URLs
       const memoriesNeedingRecovery = finalMemories.filter(
         (m) =>
           m &&
@@ -217,6 +218,7 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
     } catch (err: unknown) {
       console.error("Dashboard initialization error:", err);
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
   }, [router]);
@@ -226,8 +228,10 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
 
     const supabase = createClient();
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        fetchDashboardData();
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session?.user?.id && session.user.id !== currentUserIdRef.current) {
+          fetchDashboardData();
+        }
       } else if (event === "SIGNED_OUT") {
         router.push("/login");
       }
@@ -647,90 +651,74 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
                 />
 
                 {/* Vault Analytics & Intelligence Panel */}
-                <React.Suspense fallback={null}>
-                  <InsightsDashboard
-                    memories={activeFeedMemories}
-                    userEmail={user?.email}
-                    onSelectMemory={handleSelectMemory}
-                    onFavoriteToggle={handleFavoriteToggle}
-                    onSoftDelete={handleSoftDelete}
-                    onArchiveToggle={handleArchiveToggle}
-                    onOpenCreateModal={(type?: MemoryType) => handleOpenCreateModal(type || "photo")}
-                  />
-                </React.Suspense>
+                <InsightsDashboard
+                  memories={activeFeedMemories}
+                  userEmail={user?.email}
+                  onSelectMemory={handleSelectMemory}
+                  onFavoriteToggle={handleFavoriteToggle}
+                  onSoftDelete={handleSoftDelete}
+                  onArchiveToggle={handleArchiveToggle}
+                  onOpenCreateModal={(type?: MemoryType) => handleOpenCreateModal(type || "photo")}
+                />
               </div>
             )}
 
             {activeTab === "profile" && (
-              <React.Suspense fallback={null}>
-                <UserProfileView
-                  user={user}
-                  memories={memories}
-                  onProfileUpdated={(updated) => setUser(updated)}
-                  onMemoriesDeleted={() => fetchDashboardData()}
-                />
-              </React.Suspense>
+              <UserProfileView
+                user={user}
+                memories={memories}
+                onProfileUpdated={(updated) => setUser(updated)}
+                onMemoriesDeleted={() => fetchDashboardData()}
+              />
             )}
 
             {activeTab === "account_security" && (
-              <React.Suspense fallback={null}>
-                <AccountManagementView user={user} />
-              </React.Suspense>
+              <AccountManagementView user={user} />
             )}
 
             {activeTab === "trash" && (
-              <React.Suspense fallback={null}>
-                <TrashArchiveView
-                  memories={memories}
-                  onRestoreMemory={handleRestoreMemory}
-                  onPermanentDelete={handlePermanentDelete}
-                  onRestoreBatch={handleRestoreMemoriesBatch}
-                  onPermanentDeleteBatch={handlePermanentDeleteMemoriesBatch}
-                />
-              </React.Suspense>
+              <TrashArchiveView
+                memories={memories}
+                onRestoreMemory={handleRestoreMemory}
+                onPermanentDelete={handlePermanentDelete}
+                onRestoreBatch={handleRestoreMemoriesBatch}
+                onPermanentDeleteBatch={handlePermanentDeleteMemoriesBatch}
+              />
             )}
           </main>
         </div>
 
         {/* Floating Smart Search Palette Modal */}
-        <React.Suspense fallback={null}>
-          <SmartSearchModal
-            isOpen={isSearchModalOpen}
-            onClose={() => setIsSearchModalOpen(false)}
-            memories={activeFeedMemories}
-            onSelectMemory={handleSelectMemory}
-          />
-        </React.Suspense>
+        <SmartSearchModal
+          isOpen={isSearchModalOpen}
+          onClose={() => setIsSearchModalOpen(false)}
+          memories={activeFeedMemories}
+          onSelectMemory={handleSelectMemory}
+        />
 
         {/* Modals & Fullscreen Viewers */}
-        <React.Suspense fallback={null}>
-          <CreateMemoryModal
-            isOpen={isCreateModalOpen}
-            defaultType={defaultCreateType}
-            onClose={() => setIsCreateModalOpen(false)}
-            onMemoryCreated={handleMemoryCreated}
-          />
-        </React.Suspense>
+        <CreateMemoryModal
+          isOpen={isCreateModalOpen}
+          defaultType={defaultCreateType}
+          onClose={() => setIsCreateModalOpen(false)}
+          onMemoryCreated={handleMemoryCreated}
+        />
 
-        <React.Suspense fallback={null}>
-          <CinematicMemoryViewer
-            memory={selectedMemory}
-            allMemories={memories}
-            onClose={() => setSelectedMemory(null)}
-            onSelectMemory={handleSelectMemory}
-            onOpenEditModal={(m) => setEditingMemory(m)}
-            onSoftDelete={handleSoftDelete}
-            onFavoriteToggle={handleFavoriteToggle}
-          />
-        </React.Suspense>
+        <CinematicMemoryViewer
+          memory={selectedMemory}
+          allMemories={memories}
+          onClose={() => setSelectedMemory(null)}
+          onSelectMemory={handleSelectMemory}
+          onOpenEditModal={(m) => setEditingMemory(m)}
+          onSoftDelete={handleSoftDelete}
+          onFavoriteToggle={handleFavoriteToggle}
+        />
 
-        <React.Suspense fallback={null}>
-          <EditMemoryModal
-            memory={editingMemory}
-            onClose={() => setEditingMemory(null)}
-            onMemoryUpdated={handleMemoryUpdated}
-          />
-        </React.Suspense>
+        <EditMemoryModal
+          memory={editingMemory}
+          onClose={() => setEditingMemory(null)}
+          onMemoryUpdated={handleMemoryUpdated}
+        />
 
         {/* Premium Dashboard Footer */}
         <footer className="max-w-7xl mx-auto w-full px-6 py-8 mt-16 border-t border-white/10 flex flex-col items-center justify-center text-center space-y-2 select-none">
