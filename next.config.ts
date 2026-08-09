@@ -1,3 +1,7 @@
+/**
+ * Aurora Memory Vault — Next.js 15 Configuration
+ * Cloudflare Worker Fullstack Deployment
+ */
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
