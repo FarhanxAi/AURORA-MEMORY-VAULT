@@ -4,7 +4,7 @@
 
 **Your Private, Encrypted, AI-Assisted Memory & Journal Preservation Vault**
 
-[![Live Website](https://img.shields.io/badge/Live_Website-aurora--memory--vault.pages.dev-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://aurora-memory-vault.pages.dev)
+[![Live Website](https://img.shields.io/badge/Live_Website-aurora--memory--vault.pages.dev-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://aurora-memory-vault.myfarhan-h.workers.dev)
 [![GitHub Branch](https://img.shields.io/badge/Branch-Protected_main-success?style=for-the-badge&logo=github&logoColor=white)](https://github.com/FarhanxAi/AURORA-MEMORY-VAULT)
 [![Next.js](https://img.shields.io/badge/Next.js-15.5.22-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
@@ -16,7 +16,7 @@
 <br />
 
 ### 🌐 Live Production Application
-### 👉 **[https://aurora-memory-vault.pages.dev](https://aurora-memory-vault.pages.dev)**
+### 👉 **[https://aurora-memory-vault.myfarhan-h.workers.dev](https://aurora-memory-vault.myfarhan-h.workers.dev)**
 
 <br />
 
@@ -41,10 +41,10 @@ Aurora Memory Vault is deployed and accessible worldwide with zero installation 
 
 | Environment | Live Access URL | Status |
 | :--- | :--- | :--- |
-| **Live Web App** | **[https://aurora-memory-vault.pages.dev](https://aurora-memory-vault.pages.dev)** | 🟢 Online Worldwide |
+| **Live Web App** | **[https://aurora-memory-vault.myfarhan-h.workers.dev](https://aurora-memory-vault.myfarhan-h.workers.dev)** | 🟢 Online Worldwide |
 | **GitHub Repository** | **[https://github.com/FarhanxAi/AURORA-MEMORY-VAULT](https://github.com/FarhanxAi/AURORA-MEMORY-VAULT)** | 🔒 Protected Branch (`main`) |
 
-> **Note**: Click the **[Live Web App](https://aurora-memory-vault.pages.dev)** link above to access Aurora directly from any browser or mobile device. No local setup or installation is required!
+> **Note**: Click the **[Live Web App](https://aurora-memory-vault.myfarhan-h.workers.dev)** link above to access Aurora directly from any browser or mobile device. No local setup or installation is required!
 
 ---
 
@@ -137,7 +137,7 @@ aurora/
 
 ### 1. Direct Live Access (Recommended)
 You can use the live production website directly:
-👉 **[https://aurora-memory-vault.pages.dev](https://aurora-memory-vault.pages.dev)**
+👉 **[https://aurora-memory-vault.myfarhan-h.workers.dev](https://aurora-memory-vault.myfarhan-h.workers.dev)**
 
 ---
 
@@ -156,7 +156,7 @@ npm install
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
-NEXT_PUBLIC_SITE_URL=https://aurora-memory-vault.pages.dev
+NEXT_PUBLIC_SITE_URL=https://aurora-memory-vault.myfarhan-h.workers.dev
 
 # 4. Start local development server
 npm run dev
@@ -203,7 +203,7 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 **Farhan Hussain**  
 - **GitHub**: [@FarhanxAi](https://github.com/FarhanxAi)  
 - **Repository**: [FarhanxAi/AURORA-MEMORY-VAULT](https://github.com/FarhanxAi/AURORA-MEMORY-VAULT)  
-- **Live Application**: [https://aurora-memory-vault.pages.dev](https://aurora-memory-vault.pages.dev)
+- **Live Application**: [https://aurora-memory-vault.myfarhan-h.workers.dev](https://aurora-memory-vault.myfarhan-h.workers.dev)
 
 ---
 
