@@ -104,20 +104,21 @@ export function DashboardNavbar({
                 setShowProfileMenu(!showProfileMenu);
                 setShowNotifications(false);
               }}
-              className="flex items-center gap-2 p-1 rounded-full bg-white/[0.05] border border-white/10 hover:border-white/25 transition-all cursor-pointer"
+              className="flex items-center justify-center min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] p-0.5 rounded-full bg-white/[0.08] border border-white/15 hover:border-aurora-cyan/60 hover:shadow-[0_0_15px_rgba(56,189,248,0.3)] transition-all cursor-pointer"
+              title="Profile & Settings"
             >
               {user?.avatar_url ? (
                 <img
                   src={user.avatar_url}
-                  alt={user.full_name || "User"}
+                  alt={user.full_name || "User Profile"}
                   onError={(e) => {
                     // Hide broken image and let gradient fallback appear
                     (e.target as HTMLElement).style.display = "none";
                   }}
-                  className="w-8 h-8 rounded-full object-cover border border-aurora-cyan/50"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-aurora-cyan/50"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-aurora-cyan to-aurora-violet flex items-center justify-center text-white text-xs font-bold shadow-aurora-glow">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-aurora-cyan via-aurora-indigo to-aurora-violet flex items-center justify-center text-white text-xs sm:text-sm font-bold shadow-aurora-glow">
                   {user?.full_name?.charAt(0) || "A"}
                 </div>
               )}

@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/toast-context";
 import { vaultStore } from "@/lib/persistence/vault-store";
 import { ExportVaultModal } from "@/components/account/export-vault-modal";
+import { extractStorageBucketAndPath } from "@/lib/supabase-db";
 
 interface UserProfileViewProps {
   user: UserProfile | null;
@@ -387,6 +388,7 @@ export function UserProfileView({
       const authUserId = authUser.id;
       const authEmail = authUser.email || user.email || "";
 
+      const previousAvatarUrl = user.avatar_url;
       const newAvatarUrl = await uploadAvatarToStorage(supabase, authUserId, blob);
 
       // Upsert profiles table in database FIRST, then update local state only if cloud write succeeded
@@ -404,6 +406,19 @@ export function UserProfileView({
         console.error("[AVATAR SAVE ERROR]", updateErr.message, updateErr);
         error("Photo Save Failed", `Could not save avatar to cloud: ${updateErr.message}`);
         return;
+      }
+
+      // Clean up previous avatar file from storage to prevent orphan storage build-up
+      if (previousAvatarUrl && previousAvatarUrl !== newAvatarUrl) {
+        const parsedOld = extractStorageBucketAndPath(previousAvatarUrl);
+        if (parsedOld) {
+          try {
+            await supabase.storage.from(parsedOld.bucket).remove([parsedOld.path]);
+            console.log(`[AVATAR CLEANUP] Removed previous avatar: ${parsedOld.bucket}/${parsedOld.path}`);
+          } catch (cleanErr) {
+            console.warn("[AVATAR CLEANUP NOTICE]", cleanErr);
+          }
+        }
       }
 
       // Cloud write confirmed — now update local state
@@ -445,6 +460,8 @@ export function UserProfileView({
         return;
       }
 
+      const previousAvatarUrl = user.avatar_url;
+
       const { error: delErr } = await supabase
         .from("profiles")
         .upsert({
@@ -458,6 +475,18 @@ export function UserProfileView({
         console.error("[AVATAR DELETE ERROR]", delErr.message);
         error("Delete Failed", `Could not remove avatar from cloud: ${delErr.message}`);
         return;
+      }
+
+      // Clean up previous storage avatar file
+      if (previousAvatarUrl) {
+        const parsedOld = extractStorageBucketAndPath(previousAvatarUrl);
+        if (parsedOld) {
+          try {
+            await supabase.storage.from(parsedOld.bucket).remove([parsedOld.path]);
+          } catch (cleanErr) {
+            console.warn("[AVATAR CLEANUP NOTICE]", cleanErr);
+          }
+        }
       }
 
       setAvatarUrl("");
