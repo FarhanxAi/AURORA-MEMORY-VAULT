@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { Memory, UserProfile } from "./types";
+import { resolveMemoryImageUrlAsync } from "./image-utils";
 
 export interface ExportProgress {
   step: string;
@@ -667,7 +668,8 @@ export async function exportVaultAsZip(
       if (allImageUrls.length > 0) {
         for (let imgIdx = 0; imgIdx < allImageUrls.length; imgIdx++) {
           const imgUrl = allImageUrls[imgIdx];
-          const res = await fetchImageBlob(imgUrl);
+          const resolved = await resolveMemoryImageUrlAsync(imgUrl);
+          const res = await fetchImageBlob(resolved.url || imgUrl);
           if (res) {
             const baseTitle =
               allImageUrls.length > 1

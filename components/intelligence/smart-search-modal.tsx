@@ -17,6 +17,7 @@ import {
 import { Memory } from "@/lib/types";
 import { filterSmartSearch } from "@/lib/intelligence";
 import { highlightMatchingText } from "@/lib/journal-utils";
+import { SmartImageViewer } from "@/components/ui/smart-image-viewer";
 
 interface SmartSearchModalProps {
   isOpen: boolean;
@@ -175,11 +176,13 @@ export function SmartSearchModal({
                       <div className="flex items-center gap-3.5 overflow-hidden">
                         {/* Memory Thumbnail or Icon */}
                         {mem.cover_image ? (
-                          <img
-                            src={mem.cover_image}
-                            alt={mem.title}
-                            className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0"
-                          />
+                          <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 shrink-0">
+                            <SmartImageViewer
+                              memoryOrPath={mem}
+                              alt={mem.title}
+                              className="[&_img]:!object-cover [&_button]:hidden"
+                            />
+                          </div>
                         ) : (
                           <div className="w-12 h-12 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center shrink-0">
                             {getMediaIcon(mem.memory_type)}

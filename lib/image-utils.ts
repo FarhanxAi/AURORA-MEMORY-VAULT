@@ -299,15 +299,21 @@ export async function purgeAndVerifyMemoryStorageFiles(
 
   const deletedObjects: string[] = [];
   let freedEstimateBytes = 0;
+  const failures: string[] = [];
 
   // 1. Remove images from memory-images bucket
   if (relPaths.length > 0) {
     try {
-      await supabase.storage.from(MEMORY_IMAGE_BUCKET).remove(relPaths);
-      deletedObjects.push(...relPaths);
-      freedEstimateBytes += relPaths.length * 950000;
+      const { error } = await supabase.storage.from(MEMORY_IMAGE_BUCKET).remove(relPaths);
+      if (error) {
+        failures.push(`Image storage removal failed: ${error.message}`);
+      } else {
+        deletedObjects.push(...relPaths);
+        freedEstimateBytes += relPaths.length * 950000;
+      }
     } catch (e) {
-      console.warn("[STORAGE_CLEANUP] Remove notice:", e);
+      const message = e instanceof Error ? e.message : String(e);
+      failures.push(`Image storage removal failed: ${message}`);
     }
 
     // Clean cached URLs
@@ -320,12 +326,21 @@ export async function purgeAndVerifyMemoryStorageFiles(
   // 2. Remove audio from memory-audio bucket
   if (audioPaths.length > 0) {
     try {
-      await supabase.storage.from("memory-audio").remove(audioPaths);
-      deletedObjects.push(...audioPaths);
-      freedEstimateBytes += audioPaths.length * 2500000;
+      const { error } = await supabase.storage.from("memory-audio").remove(audioPaths);
+      if (error) {
+        failures.push(`Audio storage removal failed: ${error.message}`);
+      } else {
+        deletedObjects.push(...audioPaths);
+        freedEstimateBytes += audioPaths.length * 2500000;
+      }
     } catch (e) {
-      console.warn("[STORAGE_CLEANUP] Audio remove notice:", e);
+      const message = e instanceof Error ? e.message : String(e);
+      failures.push(`Audio storage removal failed: ${message}`);
     }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(failures.join(" | "));
   }
 
   return {

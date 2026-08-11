@@ -459,54 +459,51 @@ export function DashboardView({ initialTab = "insights" }: DashboardPageProps) {
     let totalFreedEstimate = 0;
     const deletedObjectList: string[] = [];
 
-    for (const item of targetMemories) {
-      const purgeRes = await purgeAndVerifyMemoryStorageFiles(supabase, item);
-      deletedObjectList.push(...purgeRes.deletedObjects);
-      totalFreedEstimate += purgeRes.freedEstimateBytes;
-    }
-
-    console.log("[STORAGE_AUDIT] Deleted Objects:", deletedObjectList);
-    console.log("[STORAGE_AUDIT] Bytes Freed:", totalFreedEstimate);
-
-    setMemories((prev) => {
-      const updated = prev.filter((m) => !ids.includes(m.id));
-      if (user?.id) vaultStore.saveMemories(user.id, updated);
-      const storageAfter = calculateUserStorageMetrics(updated, user?.avatar_url);
-      console.log("[STORAGE_AUDIT] Storage After:", { usedMb: storageAfter.usedMb, usedBytes: storageAfter.storageUsedBytes });
-      console.log("[STORAGE_AUDIT] Verification Result: Confirmed storage updated and zero orphan files remain.");
-      return updated;
-    });
-
-    if (user?.id) {
-      ids.forEach((id) => vaultStore.deleteMemoryItem(user.id, id));
-    }
-
     const realDbIds = ids.filter((id) => !id.startsWith("demo-") && !id.startsWith("empty-") && id !== "system");
-    if (realDbIds.length === 0) return;
 
     try {
-      const { data, error: dbErr, status } = await supabase
-        .from("memories")
-        .delete()
-        .in("id", realDbIds)
-        .select();
+      if (realDbIds.length > 0) {
+        const { data, error: dbErr, status } = await supabase
+          .from("memories")
+          .delete()
+          .in("id", realDbIds)
+          .select();
 
-      if (dbErr) {
-        console.warn("[Trash Permanent Delete Notice]", {
-          reason: "Supabase DB deletion notice",
-          targetIds: realDbIds,
-          message: dbErr.message,
-          status,
-        });
-      } else {
+        if (dbErr) {
+          throw new Error(`Database deletion failed: ${dbErr.message}`);
+        }
+
         console.log("[Trash Permanent Delete Succeeded]", {
           table: "memories",
           deletedCount: data?.length || realDbIds.length,
           status,
         });
       }
+
+      for (const item of targetMemories) {
+        const purgeRes = await purgeAndVerifyMemoryStorageFiles(supabase, item);
+        deletedObjectList.push(...purgeRes.deletedObjects);
+        totalFreedEstimate += purgeRes.freedEstimateBytes;
+      }
+
+      console.log("[STORAGE_AUDIT] Deleted Objects:", deletedObjectList);
+      console.log("[STORAGE_AUDIT] Bytes Freed:", totalFreedEstimate);
+
+      setMemories((prev) => {
+        const updated = prev.filter((m) => !ids.includes(m.id));
+        if (user?.id) vaultStore.saveMemories(user.id, updated);
+        const storageAfter = calculateUserStorageMetrics(updated, user?.avatar_url);
+        console.log("[STORAGE_AUDIT] Storage After:", { usedMb: storageAfter.usedMb, usedBytes: storageAfter.storageUsedBytes });
+        console.log("[STORAGE_AUDIT] Verification Result: Confirmed requested storage/database cleanup completed.");
+        return updated;
+      });
+
+      if (user?.id) {
+        ids.forEach((id) => vaultStore.deleteMemoryItem(user.id, id));
+      }
     } catch (err) {
-      console.warn("[Trash Permanent Delete Exception]", err);
+      console.error("[Trash Permanent Delete Failed]", err);
+      error("Delete Failed", err instanceof Error ? err.message : "Permanent deletion failed.");
     }
   };
 

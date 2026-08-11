@@ -498,16 +498,25 @@ export function UserProfileView({
       const authEmail = authUser.email || user?.email || "";
       const updatedIso = new Date().toISOString();
 
-      const { error: upsertErr } = await supabase
+      const profilePayload: Record<string, any> = {
+        id: authUserId,
+        email: authEmail,
+        full_name: fullName || user?.full_name || "Vault Explorer",
+        bio: bio || "",
+        avatar_url: avatarUrl,
+        updated_at: updatedIso,
+      };
+
+      let { error: upsertErr } = await supabase
         .from("profiles")
-        .upsert({
-          id: authUserId,
-          email: authEmail,
-          full_name: fullName || user?.full_name || "Vault Explorer",
-          bio: bio || "",
-          avatar_url: avatarUrl,
-          updated_at: updatedIso,
-        });
+        .upsert(profilePayload);
+
+      if (upsertErr && (upsertErr.message?.includes("bio") || upsertErr.code === "PGRST204")) {
+        console.warn("[PROFILE SAVE NOTICE] Retrying upsert without bio column...");
+        delete profilePayload.bio;
+        const retryRes = await supabase.from("profiles").upsert(profilePayload);
+        upsertErr = retryRes.error;
+      }
 
       if (upsertErr) {
         console.error("[PROFILE SAVE ERROR]", upsertErr.message, upsertErr);

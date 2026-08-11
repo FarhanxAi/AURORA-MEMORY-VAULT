@@ -492,11 +492,23 @@ export function CreateMemoryModal({
         file_size: memoryType === "journal" ? 0 : totalUploadedBytes,
       };
 
-      const { data: insertedData, error: dbError } = await supabase
+      let { data: insertedData, error: dbError } = await supabase
         .from("memories")
         .insert([newRecord])
         .select("*")
         .single();
+
+      if (dbError && (dbError.message?.includes("file_size") || dbError.code === "PGRST204")) {
+        console.warn("[MEMORY INSERT NOTICE] Retrying insert without file_size column...");
+        const { file_size, ...recordWithoutFileSize } = newRecord;
+        const retryRes = await supabase
+          .from("memories")
+          .insert([recordWithoutFileSize])
+          .select("*")
+          .single();
+        insertedData = retryRes.data;
+        dbError = retryRes.error;
+      }
 
       if (dbError) {
         console.error("[MEMORY INSERT ERROR]", dbError.message, dbError);

@@ -52,9 +52,9 @@ export function extractStorageBucketAndPath(url: string | null | undefined): { b
 
 /**
  * Performs atomic, transactional deletion of memories:
- * 1. Storage files across all buckets (cover images, gallery images, audio)
- * 2. Database records using dynamic table resolution and user_id filtering
- * 3. Local vaultStore persistence clean
+ * 1. Database records using canonical table name and user_id filtering
+ * 2. Storage files across all buckets (cover images, gallery images, audio)
+ * 3. Verification + local vaultStore persistence clean
  */
 export async function deleteMemoriesAtomic(
   supabase: SupabaseClient,
@@ -69,37 +69,11 @@ export async function deleteMemoriesAtomic(
   const totalItems = memoriesToDelete.length;
 
   try {
-    // Dynamically resolve production table
-    let tableName = await getMemoriesTableName(supabase);
+    const tableName = await getMemoriesTableName(supabase);
+    const failures: string[] = [];
 
-    // STEP 1: Delete Storage files (images + audio + gallery)
-    onProgress?.("Removing stored files...", 10);
-
-    for (let i = 0; i < memoriesToDelete.length; i++) {
-      const mem = memoriesToDelete[i];
-      const urlsToRemove: string[] = [];
-
-      if (mem.cover_image) urlsToRemove.push(mem.cover_image);
-      if (Array.isArray(mem.gallery)) urlsToRemove.push(...mem.gallery);
-      if (mem.audio_url) urlsToRemove.push(mem.audio_url);
-
-      for (const targetUrl of urlsToRemove) {
-        const parsed = extractStorageBucketAndPath(targetUrl);
-        if (parsed) {
-          try {
-            await supabase.storage.from(parsed.bucket).remove([parsed.path]);
-          } catch (storageErr) {
-            console.warn(`[STORAGE DELETE NOTICE] ${parsed.bucket}/${parsed.path}:`, storageErr);
-          }
-        }
-      }
-
-      const filePct = 10 + Math.round(((i + 1) / totalItems) * 45);
-      onProgress?.(`Removing stored files... (${i + 1}/${totalItems})`, Math.min(filePct, 55));
-    }
-
-    // STEP 2: Delete Database Records with dynamic schema detection
-    onProgress?.("Removing database records...", 60);
+    // STEP 1: Delete database records first.
+    onProgress?.("Removing database records...", 10);
     const idsToDelete = memoriesToDelete.map((m) => m.id);
     const chunkSize = 50;
 
@@ -115,21 +89,81 @@ export async function deleteMemoriesAtomic(
             .eq("user_id", userId);
 
           if (dbErr) {
-            console.warn(`[SUPABASE SCHEMA DELETE NOTICE] Table "${tableName}" notice: ${dbErr.message}`);
+            failures.push(`Database delete failed in ${tableName}: ${dbErr.message}`);
           }
         } catch (dbEx) {
-          console.warn(`[SUPABASE DB EXCEPTION] Table "${tableName}" delete notice:`, dbEx);
+          const message = dbEx instanceof Error ? dbEx.message : String(dbEx);
+          failures.push(`Database delete failed in ${tableName}: ${message}`);
         }
 
-        const dbPct = 60 + Math.round(((c + chunkSize) / idsToDelete.length) * 35);
+        const dbPct = 10 + Math.round(((c + chunkSize) / idsToDelete.length) * 40);
         onProgress?.(
           `Removing records... (${Math.min(c + chunkSize, idsToDelete.length)}/${idsToDelete.length})`,
-          Math.min(dbPct, 95)
+          Math.min(dbPct, 50)
         );
       }
     }
 
-    // STEP 3: Clear local persistence cache & storage records
+    if (failures.length > 0) {
+      return { success: false, deletedCount: 0, error: failures.join(" | ") };
+    }
+
+    // STEP 2: Delete Storage files (images + audio + gallery)
+    onProgress?.("Removing stored files...", 55);
+
+    for (let i = 0; i < memoriesToDelete.length; i++) {
+      const mem = memoriesToDelete[i];
+      const urlsToRemove: string[] = [];
+
+      if (mem.cover_image) urlsToRemove.push(mem.cover_image);
+      if (Array.isArray(mem.gallery)) urlsToRemove.push(...mem.gallery);
+      if (mem.audio_url) urlsToRemove.push(mem.audio_url);
+
+      for (const targetUrl of urlsToRemove) {
+        const parsed = extractStorageBucketAndPath(targetUrl);
+        if (parsed) {
+          try {
+            const { error: storageError } = await supabase.storage.from(parsed.bucket).remove([parsed.path]);
+            if (storageError) {
+              failures.push(`Storage delete failed for ${parsed.bucket}/${parsed.path}: ${storageError.message}`);
+            }
+          } catch (storageErr) {
+            const message = storageErr instanceof Error ? storageErr.message : String(storageErr);
+            failures.push(`Storage delete failed for ${parsed.bucket}/${parsed.path}: ${message}`);
+          }
+        }
+      }
+
+      const filePct = 55 + Math.round(((i + 1) / totalItems) * 30);
+      onProgress?.(`Removing stored files... (${i + 1}/${totalItems})`, Math.min(filePct, 85));
+    }
+
+    if (failures.length > 0) {
+      return { success: false, deletedCount: 0, error: failures.join(" | ") };
+    }
+
+    // STEP 3: Verify database deletion before updating local caches.
+    onProgress?.("Verifying deletion...", 90);
+
+    const { data: remainingRows, error: verifyError } = await supabase
+      .from(tableName)
+      .select("id")
+      .in("id", idsToDelete)
+      .eq("user_id", userId);
+
+    if (verifyError) {
+      return { success: false, deletedCount: 0, error: `Deletion verification failed: ${verifyError.message}` };
+    }
+
+    if (Array.isArray(remainingRows) && remainingRows.length > 0) {
+      return {
+        success: false,
+        deletedCount: 0,
+        error: `Deletion verification failed: ${remainingRows.length} memory record(s) still exist.`,
+      };
+    }
+
+    // STEP 4: Clear local persistence cache & storage records
     vaultStore.saveMemories(userId, []);
     idsToDelete.forEach((id) => vaultStore.deleteMemoryItem(userId, id));
 
