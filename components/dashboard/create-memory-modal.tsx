@@ -30,6 +30,7 @@ import { useToast } from "@/lib/toast-context";
 import { vaultStore } from "@/lib/persistence/vault-store";
 import { AURORA_CATEGORIES, AURORA_MOODS, AURORA_MOOD_GROUPS } from "@/lib/journal-utils";
 import { MEMORY_IMAGE_BUCKET } from "@/lib/image-utils";
+import { DEFAULT_USER_STORAGE_LIMIT_BYTES } from "@/lib/storage-utils";
 
 interface CreateMemoryModalProps {
   isOpen: boolean;
@@ -367,8 +368,8 @@ export function CreateMemoryModal({
       return;
     }
 
-    if (totalImagesSizeBytes > 10 * 1024 * 1024) {
-      error("Storage Exceeded", "Uploading these files would exceed your combined 10 MB image limit.");
+    if (totalImagesSizeBytes > 50 * 1024 * 1024) {
+      error("Batch Limit Exceeded", "Single memory upload batch cannot exceed 50 MB.");
       return;
     }
 

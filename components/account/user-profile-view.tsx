@@ -24,7 +24,7 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
-import { fetchRealSupabaseStorageUsage, formatByteSize, calcTotalJournalStorageBytes, calculateUserStorageMetrics } from "@/lib/storage-utils";
+import { fetchRealSupabaseStorageUsage, formatByteSize, calcTotalJournalStorageBytes, calculateUserStorageMetrics, DEFAULT_USER_STORAGE_LIMIT_BYTES } from "@/lib/storage-utils";
 import { UserProfile, Memory } from "@/lib/types";
 import { GlassButton } from "@/components/ui/glass-button";
 import { GlassInput } from "@/components/ui/glass-input";
@@ -299,6 +299,11 @@ export function UserProfileView({
       });
 
       if (!blob) throw new Error("Image compression export failed.");
+
+      if (blob.size > 10 * 1024 * 1024) {
+        error("Avatar Too Large", "Profile avatar image cannot exceed 10 MB.");
+        return;
+      }
 
       const supabase = createClient();
 

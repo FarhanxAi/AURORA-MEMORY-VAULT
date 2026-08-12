@@ -15,9 +15,13 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/toast-context";
 import { useRouter } from "next/navigation";
 
+import { vaultStore } from "@/lib/persistence/vault-store";
+
 interface AccountManagementViewProps {
   user: UserProfile | null;
 }
+
+const CONFIRMATION_PHRASE = "DELETE MY ACCOUNT";
 
 export function AccountManagementView({ user }: AccountManagementViewProps) {
   const router = useRouter();
@@ -30,52 +34,75 @@ export function AccountManagementView({ user }: AccountManagementViewProps) {
 
   // Permanent Delete Account & All Data Handler (with storage purge)
   const handleDeleteAccount = async () => {
-    if (deleteConfirmationText.trim().toUpperCase() !== "DELETE" || !user) return;
+    if (deleteConfirmationText.trim() !== CONFIRMATION_PHRASE || !user) return;
 
     setIsDeleting(true);
     try {
       const supabase = createClient();
+      const userId = user.id;
 
-      // 1. Purge files from all storage buckets
+      // 1. Purge all user files from all storage buckets
       const possibleBuckets = [
-        "memory-images",
-        "memory-videos",
-        "memory-audio",
         "avatars",
-        "profiles",
-        "backups",
+        "memory-images",
         "memories",
+        "memory-audio",
+        "profiles",
+        "memory-videos",
+        "backups",
       ];
+
       for (const bucket of possibleBuckets) {
         try {
-          const { data: files } = await supabase.storage.from(bucket).list(user.id);
+          const { data: files } = await supabase.storage.from(bucket).list(userId, { limit: 100 });
           if (files && files.length > 0) {
-            const paths = files.map((f) => `${user.id}/${f.name}`);
+            const paths = files.map((f) => `${userId}/${f.name}`);
             await supabase.storage.from(bucket).remove(paths);
+            console.log(`[STORAGE PURGE] Removed ${paths.length} files from ${bucket}`);
           }
         } catch (storageErr) {
-          console.warn("Storage cleanup notice:", storageErr);
+          console.warn(`[STORAGE PURGE NOTICE] Bucket ${bucket}:`, storageErr);
         }
       }
 
       // 2. Delete user memories
-      await supabase.from("memories").delete().eq("user_id", user.id);
+      const { error: memErr } = await supabase.from("memories").delete().eq("user_id", userId);
+      if (memErr) console.warn("[DB PURGE NOTICE] Memories:", memErr.message);
 
-      // 3. Delete user collections
-      await supabase.from("collections").delete().eq("user_id", user.id);
+      // 3. Delete user collections and items
+      try {
+        await supabase.from("collection_items").delete().eq("user_id", userId);
+      } catch {}
+      try {
+        await supabase.from("collections").delete().eq("user_id", userId);
+      } catch {}
 
-      // 4. Delete recent activity and settings
-      await supabase.from("recent_activity").delete().eq("user_id", user.id);
-      await supabase.from("pinned_collections").delete().eq("user_id", user.id);
-      await supabase.from("user_settings").delete().eq("user_id", user.id);
+      // 4. Delete user settings
+      try {
+        await supabase.from("user_settings").delete().eq("user_id", userId);
+      } catch {}
 
       // 5. Delete profile record
-      await supabase.from("profiles").delete().eq("id", user.id);
+      const { error: profErr } = await supabase.from("profiles").delete().eq("id", userId);
+      if (profErr) console.warn("[DB PURGE NOTICE] Profile:", profErr.message);
 
-      // 6. Sign out session
+      // 6. Clear all local storage cache and browser cookies for this user
+      vaultStore.deleteUserVault(userId);
+      vaultStore.clearSessionCachesOnLogout();
+
+      if (typeof document !== "undefined") {
+        document.cookie.split(";").forEach((c) => {
+          const cookieName = c.split("=")[0].trim();
+          if (cookieName.includes("sb-") || cookieName.includes("supabase")) {
+            document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+          }
+        });
+      }
+
+      // 7. Sign out auth session
       await supabase.auth.signOut();
 
-      success("Account Deleted", "Your account and all associated vault data were permanently erased.");
+      success("Account Deleted", "Your Aurora account and all associated vault data were permanently erased.");
       router.push("/");
       router.refresh();
     } catch (err: unknown) {
@@ -155,13 +182,16 @@ export function AccountManagementView({ user }: AccountManagementViewProps) {
           <h3 className="text-base font-bold">Danger Zone: Permanent Account Deletion</h3>
         </div>
 
-        <p className="text-xs text-white/70">
-          Deleting your account will permanently erase all your journals, photos, and personal memories. This action is irreversible and cannot be undone.
+        <p className="text-xs text-white/70 leading-relaxed">
+          Deleting your account will permanently erase your Aurora account, name, profile picture, all journals, photos, grouped memories, custom categories, tags, locations, favorites, and storage files. This action is irreversible and cannot be undone.
         </p>
 
         <button
-          onClick={() => setShowDeleteModal(true)}
-          className="px-5 py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2"
+          onClick={() => {
+            setDeleteConfirmationText("");
+            setShowDeleteModal(true);
+          }}
+          className="px-5 py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 active:scale-95"
         >
           <Trash2 className="w-4 h-4" />
           <span>Delete My Aurora Account</span>
@@ -171,11 +201,11 @@ export function AccountManagementView({ user }: AccountManagementViewProps) {
       {/* DELETE ACCOUNT CONFIRMATION MODAL */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-fadeIn">
-          <div className="relative w-full max-w-md glass-panel rounded-3xl border border-rose-500/40 p-6 space-y-6 shadow-2xl">
+          <div className="relative w-full max-w-lg glass-panel bg-[#090d16] rounded-3xl border border-rose-500/40 p-6 space-y-5 shadow-2xl shadow-black/90">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <span className="text-sm font-bold text-rose-400 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" />
-                Confirm Account Erasure
+                Permanent Account Deletion Warning
               </span>
               <button
                 onClick={() => setShowDeleteModal(false)}
@@ -185,22 +215,40 @@ export function AccountManagementView({ user }: AccountManagementViewProps) {
               </button>
             </div>
 
-            <p className="text-xs text-white/80 leading-relaxed">
-              Please type <strong className="text-rose-400 font-mono">DELETE</strong> in all capitals below to confirm permanent account deletion:
-            </p>
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/25 space-y-2 text-xs text-rose-200">
+              <p className="font-bold text-rose-300">
+                This will permanently erase all data associated with your account:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-white/80 text-[11px] leading-relaxed">
+                <li>Aurora account & profile information (Name, DP, Bio)</li>
+                <li>All memories, journals, reflections, and audio notes</li>
+                <li>All uploaded single & grouped photos from cloud storage</li>
+                <li>Categories, custom categories, tags, locations, and favorites</li>
+                <li>Personal vault settings and preferences</li>
+                <li>All user-owned storage files across all buckets</li>
+              </ul>
+              <p className="font-semibold text-rose-400 pt-1 text-[11px]">
+                ⚠️ This action is permanent and cannot be undone.
+              </p>
+            </div>
 
-            <input
-              type="text"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder='Type "DELETE"'
-              value={deleteConfirmationText}
-              onChange={(e) => setDeleteConfirmationText(e.target.value)}
-              className="w-full p-3 rounded-2xl bg-white/[0.04] border border-rose-500/40 text-xs text-white font-mono placeholder-white/30 focus:outline-none focus:border-rose-400"
-            />
+            <div className="space-y-2">
+              <label className="text-xs text-white/90 font-medium">
+                To confirm permanent deletion, type <strong className="text-rose-400 font-mono tracking-wider">{CONFIRMATION_PHRASE}</strong> below:
+              </label>
+              <input
+                type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder={`Type "${CONFIRMATION_PHRASE}"`}
+                value={deleteConfirmationText}
+                onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                className="w-full p-3 rounded-2xl bg-white/[0.04] border border-rose-500/40 text-xs text-white font-mono placeholder-white/30 focus:outline-none focus:border-rose-400 shadow-inner"
+              />
+            </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end gap-3 pt-2 border-t border-white/10">
               <GlassButton
                 variant="secondary"
                 size="sm"
@@ -209,11 +257,11 @@ export function AccountManagementView({ user }: AccountManagementViewProps) {
                 Cancel
               </GlassButton>
               <button
-                disabled={deleteConfirmationText.trim().toUpperCase() !== "DELETE" || isDeleting}
+                disabled={deleteConfirmationText.trim() !== CONFIRMATION_PHRASE || isDeleting}
                 onClick={handleDeleteAccount}
-                className="px-4 py-2 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold transition-all cursor-pointer shadow-lg"
+                className="px-5 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-rose-900/40"
               >
-                {isDeleting ? "Erasing..." : "Permanently Delete Everything"}
+                {isDeleting ? "Permanently Erasing..." : "Permanently Delete Account"}
               </button>
             </div>
           </div>
