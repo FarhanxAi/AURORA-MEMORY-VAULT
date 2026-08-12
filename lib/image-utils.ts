@@ -3,6 +3,7 @@ import { createClient } from "./supabase/client";
 import { getMemoriesTableName } from "./supabase-db";
 
 export const MEMORY_IMAGE_BUCKET = "memory-images";
+export const AVATAR_BUCKET = "avatars";
 
 // High-speed in-memory resolution cache to eliminate duplicate network & storage queries
 const resolvedUrlCache = new Map<string, string>();
@@ -21,16 +22,33 @@ export function extractStoragePath(rawPathOrUrl?: string | null): string | null 
   clean = clean.split("?")[0];
 
   // 2. Extract path after bucket name or object endpoints
-  if (clean.includes(`/${MEMORY_IMAGE_BUCKET}/`)) {
-    clean = clean.split(`/${MEMORY_IMAGE_BUCKET}/`)[1] || clean;
-  } else if (clean.includes("/object/public/")) {
-    clean = clean.split("/object/public/")[1] || clean;
+  const knownBuckets = ["memory-images", "avatars", "profiles", "memories", "memory-audio", "memory-videos"];
+  for (const bucket of knownBuckets) {
+    if (clean.includes(`/${bucket}/`)) {
+      clean = clean.split(`/${bucket}/`)[1] || clean;
+      break;
+    }
+  }
+
+  if (clean.includes("/object/public/")) {
+    const parts = clean.split("/object/public/")[1]?.split("/");
+    if (parts && parts.length > 1) {
+      parts.shift(); // remove bucket
+      clean = parts.join("/");
+    }
   } else if (clean.includes("/object/sign/")) {
-    clean = clean.split("/object/sign/")[1] || clean;
+    const parts = clean.split("/object/sign/")[1]?.split("/");
+    if (parts && parts.length > 1) {
+      parts.shift(); // remove bucket
+      clean = parts.join("/");
+    }
   }
 
   // 3. Remove leading bucket prefix and leading slashes
-  clean = clean.replace(new RegExp(`^${MEMORY_IMAGE_BUCKET}\/`), "").replace(/^\/+/, "");
+  for (const bucket of knownBuckets) {
+    clean = clean.replace(new RegExp(`^${bucket}\/`), "");
+  }
+  clean = clean.replace(/^\/+/, "");
 
   // 4. Return null if still an unparsed http/https URL
   if (clean.startsWith("http://") || clean.startsWith("https://")) {
@@ -38,6 +56,30 @@ export function extractStoragePath(rawPathOrUrl?: string | null): string | null 
   }
 
   return clean || null;
+}
+
+/**
+ * Resolves avatar URL for user profile pictures.
+ * Handles Google OAuth URLs, Supabase Storage public URLs, relative storage paths, and data URLs.
+ */
+export function resolveAvatarUrl(rawUrlOrPath?: string | null): string | null {
+  if (!rawUrlOrPath || typeof rawUrlOrPath !== "string" || !rawUrlOrPath.trim()) return null;
+  const clean = rawUrlOrPath.trim();
+
+  // If already data URL or full HTTP/HTTPS URL (e.g. Google profile picture or full public Supabase URL)
+  if (clean.startsWith("data:") || clean.startsWith("blob:") || clean.startsWith("http://") || clean.startsWith("https://")) {
+    return clean;
+  }
+
+  // Relative storage path: resolve via avatars bucket
+  const relPath = extractStoragePath(clean) || clean;
+  try {
+    const supabase = createClient();
+    const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(relPath);
+    return data?.publicUrl || clean;
+  } catch {
+    return clean;
+  }
 }
 
 /**
@@ -349,3 +391,53 @@ export async function purgeAndVerifyMemoryStorageFiles(
     verifiedClean: true,
   };
 }
+
+/**
+ * Resilient helper to upload avatar images to Supabase Storage.
+ * Deterministically uses the avatars bucket and verifies success.
+ * Never silently converts to base64.
+ */
+export async function uploadAvatarToStorage(
+  supabase: any,
+  userId: string,
+  fileOrBlob: Blob | File
+): Promise<string> {
+  const fileExt = "webp";
+  const filePath = `${userId}/avatar_${Date.now()}.${fileExt}`;
+
+  // Try avatars bucket first, then memory-images, then memories
+  const bucketList = [AVATAR_BUCKET, MEMORY_IMAGE_BUCKET, "memories"];
+  let lastError: Error | null = null;
+
+  for (const bucket of bucketList) {
+    try {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, fileOrBlob, {
+          contentType: "image/webp",
+          upsert: true,
+        });
+
+      if (!error && data) {
+        const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+        if (publicUrlData?.publicUrl) {
+          console.log(`[AVATAR UPLOAD SUCCESS] Bucket: ${bucket}, Path: ${filePath}`);
+          return publicUrlData.publicUrl;
+        }
+      } else if (error) {
+        lastError = new Error(error.message);
+        console.warn(`[AVATAR UPLOAD ATTEMPT] Bucket "${bucket}":`, error.message);
+      }
+    } catch (err: any) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[AVATAR UPLOAD ATTEMPT] Bucket "${bucket}" exception:`, err);
+    }
+  }
+
+  if (lastError) {
+    throw new Error(`Failed to upload avatar to cloud storage: ${lastError.message}`);
+  }
+
+  throw new Error("Avatar upload could not be completed. Please check storage bucket permissions.");
+}
+

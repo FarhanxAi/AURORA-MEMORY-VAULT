@@ -2,27 +2,17 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import {
-  Sparkles,
-  Search,
-  Plus,
-  Bell,
-  User,
-  LogOut,
-  X,
-  CheckCircle2,
-  ShieldCheck,
-} from "lucide-react";
-import { GlassButton } from "@/components/ui/glass-button";
-import { UserProfile, NotificationItem } from "@/lib/types";
+import { Search, Sparkles, LogOut, User, ShieldCheck, CheckCircle2, Shield } from "lucide-react";
+import { UserProfile } from "@/lib/types";
+import { resolveAvatarUrl } from "@/lib/image-utils";
 
 interface DashboardNavbarProps {
   user: UserProfile | null;
   searchQuery: string;
-  onSearchChange: (q: string) => void;
-  onOpenCreateModal: () => void;
+  onSearchChange: (query: string) => void;
   onLogout: () => void;
-  notifications: NotificationItem[];
+  onOpenCreateModal?: () => void;
+  notifications?: any[];
   onOpenProfile?: () => void;
 }
 
@@ -30,73 +20,54 @@ export function DashboardNavbar({
   user,
   searchQuery,
   onSearchChange,
-  onOpenCreateModal,
   onLogout,
-  notifications,
+  onOpenCreateModal,
+  notifications = [],
   onOpenProfile,
 }: DashboardNavbarProps) {
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showSecurityDetails, setShowSecurityDetails] = useState(false);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const resolvedAvatar = resolveAvatarUrl(user?.avatar_url);
 
   return (
-    <header className="sticky top-0 z-40 w-full px-4 pt-4 sm:pt-6 pb-2">
-      <div className="max-w-7xl mx-auto glass-navbar rounded-full px-4 sm:px-6 py-3 flex items-center justify-between gap-4 border border-white/12 shadow-glass-lg">
-        {/* Brand / Logo */}
-        <Link href="/dashboard" className="flex items-center gap-3 shrink-0 group">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-aurora-cyan via-aurora-indigo to-aurora-violet p-0.5 shadow-aurora-glow group-hover:scale-105 transition-transform duration-300">
-            <div className="w-full h-full bg-[#030712] rounded-[14px] flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-aurora-cyan" />
-            </div>
+    <header className="sticky top-0 z-40 w-full backdrop-blur-2xl bg-[#030712]/80 border-b border-white/10 transition-all duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3 sm:gap-4">
+        {/* Brand Logo & Name */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-aurora-cyan via-aurora-indigo to-aurora-violet flex items-center justify-center shadow-[0_0_25px_rgba(56,189,248,0.4)] border border-white/20">
+            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
-          <div className="hidden sm:flex flex-col">
-            <span className="font-display font-bold text-white text-base tracking-tight group-hover:text-aurora-cyan transition-colors">
+          <div className="hidden sm:block">
+            <h1 className="text-lg sm:text-xl font-display font-bold text-white tracking-tight leading-none">
               Aurora
-            </span>
-            <span className="text-[9px] uppercase tracking-widest text-white/50 font-semibold">
-              Vault Dashboard
-            </span>
+            </h1>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-aurora-cyan/90 mt-0.5">
+              Memory Vault
+            </p>
           </div>
-        </Link>
-
-        {/* Live Search Bar */}
-        <div className="flex-1 max-w-md relative">
-          <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="Search memories by title, tags, category..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-9 py-2 rounded-full text-xs text-white placeholder-white/40 bg-white/[0.04] border border-white/12 backdrop-blur-md focus:outline-none focus:bg-white/[0.08] focus:border-aurora-cyan/60 focus:shadow-[0_0_20px_rgba(56,189,248,0.2)] transition-all"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => onSearchChange("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Quick Add Memory */}
-          <GlassButton
-            variant="primary"
-            size="sm"
-            onClick={onOpenCreateModal}
-            leftIcon={<Plus className="w-4 h-4" />}
-          >
-            <span className="hidden sm:inline">Add Memory</span>
-            <span className="sm:hidden">Add</span>
-          </GlassButton>
+        {/* Realtime Search Input */}
+        <div className="flex-1 max-w-md mx-2 sm:mx-4">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
+            <input
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="Search memories, tags, categories, journals..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 sm:py-2.5 rounded-2xl bg-white/[0.06] border border-white/12 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none focus:border-aurora-cyan/70 focus:bg-white/[0.09] focus:ring-1 focus:ring-aurora-cyan/40 transition-all shadow-inner"
+            />
+          </div>
+        </div>
 
+        {/* Right Actions & Account Status */}
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Profile Avatar Dropdown */}
           <div className="relative">
             <button
@@ -107,21 +78,25 @@ export function DashboardNavbar({
               className="flex items-center justify-center min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] p-0.5 rounded-full bg-white/[0.08] border border-white/15 hover:border-aurora-cyan/60 hover:shadow-[0_0_15px_rgba(56,189,248,0.3)] transition-all cursor-pointer"
               title="Profile & Settings"
             >
-              {user?.avatar_url ? (
+              {resolvedAvatar ? (
                 <img
-                  src={user.avatar_url}
-                  alt={user.full_name || "User Profile"}
+                  src={resolvedAvatar}
+                  alt={user?.full_name || "User Profile"}
                   onError={(e) => {
-                    // Hide broken image and let gradient fallback appear
-                    (e.target as HTMLElement).style.display = "none";
+                    (e.currentTarget as HTMLElement).style.display = "none";
+                    const fb = e.currentTarget.parentElement?.querySelector(".nav-avatar-fallback") as HTMLElement;
+                    if (fb) fb.style.display = "flex";
                   }}
                   className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-aurora-cyan/50"
                 />
-              ) : (
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-aurora-cyan via-aurora-indigo to-aurora-violet flex items-center justify-center text-white text-xs sm:text-sm font-bold shadow-aurora-glow">
-                  {user?.full_name?.charAt(0) || "A"}
-                </div>
-              )}
+              ) : null}
+              <div
+                className={`nav-avatar-fallback w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-aurora-cyan via-aurora-indigo to-aurora-violet flex items-center justify-center text-white text-xs sm:text-sm font-bold shadow-aurora-glow ${
+                  resolvedAvatar ? "hidden" : ""
+                }`}
+              >
+                {user?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || "A"}
+              </div>
             </button>
 
             {showProfileMenu && (

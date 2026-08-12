@@ -33,69 +33,13 @@ import { useToast } from "@/lib/toast-context";
 import { vaultStore } from "@/lib/persistence/vault-store";
 import { ExportVaultModal } from "@/components/account/export-vault-modal";
 import { extractStorageBucketAndPath } from "@/lib/supabase-db";
+import { uploadAvatarToStorage, resolveAvatarUrl } from "@/lib/image-utils";
 
 interface UserProfileViewProps {
   user: UserProfile | null;
   memories: Memory[];
   onProfileUpdated: (updated: UserProfile) => void;
   onMemoriesDeleted?: () => void;
-}
-
-// Resilient helper to upload avatar image to Supabase Storage
-async function uploadAvatarToStorage(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  fileOrBlob: Blob | File
-): Promise<string> {
-  const possibleBucketNames = ["memory-images", "avatars", "profiles", "memories"];
-  const fileExt = "webp";
-  const filePath = `${userId}/avatar_${Date.now()}.${fileExt}`;
-
-  let targetBucket = "memory-images";
-  let lastError: Error | null = null;
-
-  for (const bucketName of possibleBucketNames) {
-    try {
-      const uploadRes = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, fileOrBlob, {
-          contentType: "image/webp",
-          upsert: true,
-        });
-
-      if (!uploadRes.error) {
-        targetBucket = bucketName;
-        const { data: publicUrlData } = supabase.storage
-          .from(bucketName)
-          .getPublicUrl(filePath);
-
-        if (publicUrlData?.publicUrl) {
-          console.log(`[AVATAR UPLOAD SUCCESS] Uploaded to bucket "${bucketName}" at path "${filePath}"`);
-          return publicUrlData.publicUrl;
-        }
-      } else {
-        lastError = new Error(uploadRes.error.message);
-        console.warn(`[AVATAR UPLOAD NOTICE] Bucket "${bucketName}" attempt:`, uploadRes.error.message);
-      }
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`[AVATAR UPLOAD NOTICE] Bucket "${bucketName}" exception:`, err);
-    }
-  }
-
-  // If standard buckets failed, throw error or fallback safely
-  if (lastError) {
-    console.error("[AVATAR STORAGE FAILED]", lastError);
-  }
-
-  // Fail-safe fallback: convert blob to Base64 data URL if storage upload failed
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      resolve(reader.result as string);
-    };
-    reader.readAsDataURL(fileOrBlob);
-  });
 }
 
 export function UserProfileView({
@@ -184,18 +128,11 @@ export function UserProfileView({
     fetchStorageBytes();
   }, [fetchStorageBytes]);
 
-  // Immutable Member Since (Persisted permanently across logins)
+  // Real Member Since (Original account creation timestamp from Supabase)
   const memberSinceDisplay = useMemo(() => {
-    if (typeof window !== "undefined" && user?.id) {
-      const storageKey = `aurora_member_since_${user.id}`;
-      let storedDate = localStorage.getItem(storageKey);
-      if (!storedDate) {
-        storedDate = user?.created_at || new Date().toISOString();
-        try {
-          localStorage.setItem(storageKey, storedDate);
-        } catch {}
-      }
-      const d = new Date(storedDate);
+    const rawDate = user?.created_at;
+    if (rawDate) {
+      const d = new Date(rawDate);
       if (!isNaN(d.getTime())) {
         return d.toLocaleDateString("en-GB", {
           day: "2-digit",
@@ -204,26 +141,17 @@ export function UserProfileView({
         });
       }
     }
-    return "05 Nov 2026";
-  }, [user?.id, user?.created_at]);
+    return "Member";
+  }, [user?.created_at]);
 
-  // Dynamic Last Login Display — uses Supabase DB value (user.last_login) first,
-  // falls back to localStorage timestamp set during the OAuth callback profile upsert.
+  // Real Last Login Display — uses Supabase DB value (user.last_login)
   const lastLoginDisplay = useMemo(() => {
-    // Priority 1: real timestamp stored in database via auth callback upsert
-    let rawDate: string | null = user?.last_login || null;
+    const rawDate: string | null = user?.last_login || null;
 
-    // Priority 2: localStorage cache (set during same login session by vault-store)
-    if (!rawDate && typeof window !== "undefined" && user?.id) {
-      const lastLoginKey = `aurora_last_login_${user.id}`;
-      rawDate = localStorage.getItem(lastLoginKey);
-    }
-
-    // If still no date, do NOT default to now() — show nothing rather than mislead
-    if (!rawDate) return "—";
+    if (!rawDate) return "Just now";
 
     const d = new Date(rawDate);
-    if (isNaN(d.getTime())) return "—";
+    if (isNaN(d.getTime())) return "Just now";
 
     const datePart = d.toLocaleDateString("en-GB", {
       day: "2-digit",
@@ -236,7 +164,7 @@ export function UserProfileView({
       hour12: true,
     });
     return `${datePart} at ${timePart}`;
-  }, [user?.id, user?.last_login]);
+  }, [user?.last_login]);
 
   // Calculate formatted real storage used.
   // Source of truth order:
@@ -590,17 +518,25 @@ export function UserProfileView({
           <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
             {/* Avatar Uploader Component */}
             <div className="relative group">
-              {avatarUrl ? (
+              {resolveAvatarUrl(avatarUrl) ? (
                 <img
-                  src={avatarUrl}
+                  src={resolveAvatarUrl(avatarUrl)!}
                   alt={fullName}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = "none";
+                    const fb = e.currentTarget.parentElement?.querySelector(".profile-avatar-fallback") as HTMLElement;
+                    if (fb) fb.style.display = "flex";
+                  }}
                   className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover border-2 border-aurora-cyan/60 shadow-aurora-glow"
                 />
-              ) : (
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-gradient-to-tr from-aurora-cyan via-aurora-indigo to-aurora-violet flex items-center justify-center text-white text-3xl font-bold shadow-aurora-glow">
-                  {fullName?.charAt(0) || "A"}
-                </div>
-              )}
+              ) : null}
+              <div
+                className={`profile-avatar-fallback w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-gradient-to-tr from-aurora-cyan via-aurora-indigo to-aurora-violet flex items-center justify-center text-white text-3xl font-bold shadow-aurora-glow ${
+                  resolveAvatarUrl(avatarUrl) ? "hidden" : ""
+                }`}
+              >
+                {fullName?.charAt(0) || "A"}
+              </div>
 
               {/* Upload trigger overlay — visible on hover (desktop) AND always visible on mobile touch */}
               <label className="absolute inset-0 rounded-3xl bg-[#030712]/60 opacity-0 group-hover:opacity-100 sm:opacity-0 flex flex-col items-center justify-center text-white text-xs font-semibold cursor-pointer transition-all duration-300 backdrop-blur-md">

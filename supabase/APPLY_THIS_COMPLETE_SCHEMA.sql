@@ -244,27 +244,27 @@ CREATE TRIGGER on_auth_user_login
     EXECUTE FUNCTION public.handle_user_login();
 
 -- ============================================================
--- 8. STORAGE BUCKETS (private — images served via signed URLs)
+-- 8. STORAGE BUCKETS (public with owner-only RLS write policies)
 -- ============================================================
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('memory-images', 'memory-images', false, 52428800, ARRAY['image/jpeg','image/jpg','image/png','image/webp','image/gif','image/*'])
-ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 52428800;
+VALUES ('memory-images', 'memory-images', true, 52428800, ARRAY['image/jpeg','image/jpg','image/png','image/webp','image/gif','image/*'])
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('memories', 'memories', false, 104857600, ARRAY['image/*','video/*','audio/*'])
-ON CONFLICT (id) DO UPDATE SET public = false;
+VALUES ('memories', 'memories', true, 104857600, ARRAY['image/*','video/*','audio/*'])
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('avatars', 'avatars', false, 10485760, ARRAY['image/*'])
-ON CONFLICT (id) DO UPDATE SET public = false;
+VALUES ('avatars', 'avatars', true, 10485760, ARRAY['image/*'])
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('profiles', 'profiles', false, 10485760, ARRAY['image/*'])
-ON CONFLICT (id) DO UPDATE SET public = false;
+VALUES ('profiles', 'profiles', true, 10485760, ARRAY['image/*'])
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('memory-audio', 'memory-audio', false, 104857600, ARRAY['audio/*'])
-ON CONFLICT (id) DO UPDATE SET public = false;
+VALUES ('memory-audio', 'memory-audio', true, 104857600, ARRAY['audio/*'])
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- ============================================================
 -- 9. STORAGE RLS POLICIES
